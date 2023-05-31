@@ -6,9 +6,9 @@
 
 从release直接下载编译好的二进制程序
 
-一般手机平板下载 [go-touch-mapper_arm64](https://github.com/DriverLin/go-touch-mapper/releases/latest/download/go-touch-mapper_arm64)
+一般手机平板下载 [go-touch-mapper_arm64](https://github.com/RiderLty/go-touch-mapper/releases/latest/download/go-touch-mapper_arm64)
 
-androidX86下载 [go-touch-mapper_amd64](https://github.com/DriverLin/go-touch-mapper/releases/latest/download/go-touch-mapper_amd64)
+androidX86下载 [go-touch-mapper_amd64](https://github.com/RiderLty/go-touch-mapper/releases/latest/download/go-touch-mapper_amd64)
 
 读取dev和创建uinput需要shell或者root权限
 
@@ -16,7 +16,7 @@ androidX86下载 [go-touch-mapper_amd64](https://github.com/DriverLin/go-touch-m
 
 ```
 cd /data/local/tmp
-curl -LJo go-touch-mapper https://github.com/DriverLin/go-touch-mapper/releases/latest/download/go-touch-mapper_arm64
+curl -LJo go-touch-mapper https://github.com/RiderLty/go-touch-mapper/releases/latest/download/go-touch-mapper_arm64
 chmod 777 ./go-touch-mapper
 ./go-touch-mapper -h
 ```
@@ -26,7 +26,7 @@ chmod 777 ./go-touch-mapper
 环境 termux
 ```
 pkg i golang -y
-git clone https://github.com/DriverLin/go-touch-mapper
+git clone https://github.com/RiderLty/go-touch-mapper
 cd go-touch-mapper
 CGO_ENABLE=0 GOOS=linux go build -ldflags="-s -w"
 ./go-touch-mapper -h
@@ -94,7 +94,7 @@ go-touch-mapper -a -c configs/SMC_JS.json
 ## 配置文件
 [创建映射文件工具](https://driverlin.github.io/go-touch-mapper/build/)
 
-如有需要，可参照[EXAMPLE.JSON](https://github.com/DriverLin/go-touch-mapper/blob/main/configs/EXAMPLE.JSON)手动修改配置文件
+如有需要，可参照[EXAMPLE.JSON](https://github.com/RiderLty/go-touch-mapper/blob/main/configs/EXAMPLE.JSON)手动修改配置文件
 
 左上角为原点，向右为X，向下为Y
 
@@ -135,7 +135,7 @@ PC上 修改remote_control中sender("192.168.1.64:61069")为手机IP，端口默
 python remote_control.py 
 ```
 
-## [InputManager](https://github.com/DriverLin/inputManager-touch-interface)
+## [InputManager](https://github.com/RiderLty/inputManager-touch-interface)
 ### 说明
 由Scrcpy修改而来，使用app_process启动
 
