@@ -3,6 +3,7 @@ name: Go build
 on:
   repository_dispatch:
     types: RELEASE
+  workflow_dispatch:
 jobs:
   build:
     runs-on: ubuntu-latest
