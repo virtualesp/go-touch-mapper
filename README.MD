@@ -92,7 +92,7 @@ go-touch-mapper -a -c configs/SMC_JS.json
 默认键盘使用 ` 键，可在配置文件中修改，手柄为SELECT+RS组合键
 
 ## 配置文件
-[创建映射文件工具](https://driverlin.github.io/go-touch-mapper/build/)
+[创建映射文件工具](https://riderlty.github.io/go-touch-mapper/)
 
 如有需要，可参照[EXAMPLE.JSON](https://github.com/RiderLty/go-touch-mapper/blob/main/configs/EXAMPLE.JSON)手动修改配置文件
 
