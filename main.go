@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
@@ -142,17 +143,22 @@ var global_close_signal = make(chan bool) //仅会在程序退出时关闭  不�
 var global_device_orientation int32 = 0
 
 func get_device_orientation() int32 {
-	cmd := "dumpsys input | grep -i surfaceorientation | awk '{ print $2 }'"
-	out, err := exec.Command("sh", "-c", cmd).Output()
+	output, err := exec.Command("sh", "-c", "dumpsys input").Output()
 	if err != nil {
-		return 0
-	} else {
-		result, err := strconv.Atoi(string(out[0:1]))
+		panic(err)
+	}
+	re := regexp.MustCompile(`orientation=(\d+)`)
+	matches := re.FindStringSubmatch(string(output))
+	if len(matches) > 1 {
+		orientation := matches[1]
+		result, err := strconv.Atoi(string(orientation))
 		if err != nil {
 			return 0
 		} else {
 			return int32(result)
 		}
+	} else {
+		return 0
 	}
 }
 
