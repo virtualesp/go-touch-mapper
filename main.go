@@ -168,7 +168,11 @@ func listen_device_orientation() {
 		case <-global_close_signal:
 			return
 		default:
-			global_device_orientation = get_device_orientation()
+			var now_orientation int32 = get_device_orientation()
+			if global_device_orientation != now_orientation {
+				global_device_orientation = now_orientation
+				logger.Debugf("orientation changed\t[%d] ", now_orientation)
+			}
 			time.Sleep(time.Duration(1) * time.Second)
 		}
 	}

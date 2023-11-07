@@ -770,6 +770,7 @@ func (self *TouchHandler) handel_abs_events(events []*evdev.Event, dev_name stri
 
 func (self *TouchHandler) mix_touch(touch_events chan *event_pack, max_mt_x, max_mt_y int32) {
 	wm_size_x, wm_size_y := get_wm_size()
+	logger.Infof("xy_wmsize:(%d,%d)", wm_size_x, wm_size_y)
 	id_2_vid := make([]int32, 10) //硬件ID到虚拟ID的映射
 	var last_id int32 = 0
 	pos_s := make([][]int32, 10)
@@ -786,11 +787,13 @@ func (self *TouchHandler) mix_touch(touch_events chan *event_pack, max_mt_x, max
 		case 0: //normal
 			return x, y
 		case 1: //left side down
-			return y, self.screen_y - x
+			// return y, self.screen_y - x
+			return y, wm_size_x - x
 		case 2: //up side down
-			return self.screen_y - x, self.screen_x - y
+			// return self.screen_y - x, self.screen_x - y
+			return wm_size_x - x, wm_size_y - y
 		case 3: //right side down
-			return self.screen_x - y, x
+			return wm_size_y - y, x
 		default:
 			return x, y
 		}
@@ -809,7 +812,6 @@ func (self *TouchHandler) mix_touch(touch_events chan *event_pack, max_mt_x, max
 				switch event.Code {
 				case ABS_MT_POSITION_X:
 					pos_s[last_id] = []int32{event.Value * wm_size_x / max_mt_x, pos_s[last_id][1]}
-
 				case ABS_MT_POSITION_Y:
 					pos_s[last_id] = []int32{pos_s[last_id][0], event.Value * wm_size_y / max_mt_y}
 				case ABS_MT_TRACKING_ID:
@@ -827,7 +829,7 @@ func (self *TouchHandler) mix_touch(touch_events chan *event_pack, max_mt_x, max
 					if id_statuses[i] { //false -> true 申请
 						x, y := translate_xy(pos_s[i][0], pos_s[i][1])
 						id_2_vid[i] = self.touch_require(x, y, touch_pos_scale)
-						logger.Debugf("mixTouch\trequire\t[%d] (%d,%d)", i, x, y)
+						logger.Debugf("mixTouch\trequire\t[%d] translate_xy(%d,%d) => (%d,%d)", i, pos_s[i][0], pos_s[i][1], x, y)
 					} else {
 						self.touch_release(id_2_vid[i])
 						logger.Debugf("miTouch\trelease\t[%d] ", i)
@@ -836,8 +838,7 @@ func (self *TouchHandler) mix_touch(touch_events chan *event_pack, max_mt_x, max
 					if pos_s[i][0] != copy_pos_s[i][0] || pos_s[i][1] != copy_pos_s[i][1] {
 						x, y := translate_xy(pos_s[i][0], pos_s[i][1])
 						self.touch_move(id_2_vid[i], x, y, touch_pos_scale)
-						logger.Debugf("mixTouch\tmove\t[%d] (%d,%d)", i, x, y)
-
+						logger.Debugf("mixTouch\tmove\t[%d] translate_xy(%d,%d) => (%d,%d)", i, pos_s[i][0], pos_s[i][1], x, y)
 					}
 				}
 			}
