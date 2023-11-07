@@ -96,9 +96,15 @@ go-touch-mapper -a -c configs/SMC_JS.json
 
 如有需要，可参照[EXAMPLE.JSON](https://github.com/RiderLty/go-touch-mapper/blob/main/configs/EXAMPLE.JSON)手动修改配置文件
 
-左上角为原点，向右为X，向下为Y
+可自动检测屏幕旋转方向，始终以左上角为原点，向右为X，向下为Y
 
 按住键盘按键后，点击即可添加按键映射
+
+灵敏度设置 MOUSE:SPEED:[ x , y ] float64类型
+
+实际计算输出为 int( Speed * 256 * real_move ) 
+
+虚拟触屏的大小为原始屏幕尺寸的256倍，以此解决缩放时慢速移动累计精度丢失的问题
 
 ## 手柄支持
 joystickInfos文件夹下json文件为手柄配置文件
