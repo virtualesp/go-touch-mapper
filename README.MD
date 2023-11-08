@@ -153,16 +153,6 @@ python remote_control.py
 
 且由于Unix Domain Socket的相关权限设定，主程序也必须运行在adb shell下
 
-### 使用
-
-###### 先启动主程序(server)
-```
-go-touch-mapper -a -c configs/SMC_JS.json -i
-```
-
-###### 再启动InputManager(client)
-```
-adb push inputManager/app-debug.apk /data/local/tmp/
-adb shell CLASSPATH=/data/local/tmp/app-debug.apk  app_process ./ com.genymobile.scrcpy.Server 0
+相比较于uinput输入方式，可以在多显示器的情况下指定displayID
 ```
 

@@ -447,10 +447,10 @@ func main() {
 		Help:     "配置文件路径",
 	})
 
-	var usingInputManager *bool = parser.Flag("i", "inputManager", &argparse.Options{
+	var usingInputManagerID *int = parser.Int("i", "inputManager", &argparse.Options{
 		Required: false,
-		Default:  false,
-		Help:     "使用inputManager控制触摸",
+		Default:  -1,
+		Help:     "使用inputManager控制触摸,需指定DisplayID",
 	})
 
 	var using_remote_control *bool = parser.Flag("r", "remoteControl", &argparse.Options{
@@ -572,9 +572,9 @@ func main() {
 		go handel_u_input_mouse_keyboard(fileted_u_input_control_ch)
 
 		var couch_control_func touch_control_func
-		if *usingInputManager {
+		if *usingInputManagerID != -1 {
 			logger.Info("触屏控制将使用inputManager处理")
-			couch_control_func = handel_touch_using_input_manager()
+			couch_control_func = handel_touch_using_input_manager(*usingInputManagerID)
 		} else {
 			couch_control_func = handel_touch_using_vTouch()
 		}
@@ -585,7 +585,7 @@ func main() {
 			events_ch,
 			couch_control_func,
 			u_input_control_ch,
-			!*usingInputManager,
+			*usingInputManagerID == -1,
 			map_switch_signal,
 			*measure_sensitivity_mode,
 		)

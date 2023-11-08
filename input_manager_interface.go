@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"strconv"
 )
 
 func extractAPK(fileName string, destinationPath string) error {
@@ -23,19 +24,19 @@ func extractAPK(fileName string, destinationPath string) error {
 	return nil
 }
 
-func startInputManager() {
+func startInputManager(displayID int) {
 	if err := extractAPK("inputManager.apk", "/data/local/tmp/inputManager.apk"); err != nil {
 		logger.Errorf("无法提取 APK 文件：%s\n", err)
 		return
 	}
-	cmd := exec.Command("app_process", ".", "com.genymobile.scrcpy.Server", "0")
+	cmd := exec.Command("app_process", ".", "com.genymobile.scrcpy.Server", strconv.Itoa(displayID))
 	cmd.Env = append(os.Environ(), "CLASSPATH=/data/local/tmp/inputManager.apk")
 	err := cmd.Start()
 	if err != nil {
 		logger.Errorf("无法启动InputManager：%s\n", err)
 		os.Exit(1)
 	} else {
-		logger.Info("InputManager已启动")
+		// logger.Info("InputManager已启动")
 	}
 }
 
@@ -44,7 +45,7 @@ func stopInputManager() {
 	cmd.Run()
 }
 
-func handel_touch_using_input_manager() touch_control_func {
+func handel_touch_using_input_manager(displayID int) touch_control_func {
 	unixAddr, err := net.ResolveUnixAddr("unix", "@uds_input_manager")
 	if err != nil {
 		logger.Errorf("创建Unix Domain Socket失败 : %s", err.Error())
@@ -53,7 +54,7 @@ func handel_touch_using_input_manager() touch_control_func {
 	unixListener, _ := net.ListenUnix("unix", unixAddr)
 
 	logger.Info("waiting for input manager to connect")
-	startInputManager()
+	startInputManager(displayID)
 	unixConn, _ := unixListener.AcceptUnix()
 
 	logger.Info("input manager connected")
