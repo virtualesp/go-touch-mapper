@@ -15,8 +15,11 @@ jobs:
       with:
         go-version: 1.18
     
+    - name: install go-bindata
+      run: go get -u github.com/go-bindata/go-bindata/...
+
     - name: build assets
-      run: sudo apt install go-bindata & go-bindata -pkg main -o inputManager.go-bindata.go inputManager.apk 
+      run: go-bindata -pkg main -o inputManager.go-bindata.go inputManager.apk 
     
     - name: install and pre build
       run: go build
