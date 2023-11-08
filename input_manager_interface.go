@@ -3,27 +3,46 @@ package main
 import (
 	"bufio"
 	"encoding/binary"
+	"io/ioutil"
 	"net"
 	"os"
-	"time"
+	"os/exec"
 )
 
-func startInputManager(){
-	time.sleep(time.Second * 1)
-	cmd := exec.Command("sh -c \"CLASSPATH=/data/local/tmp/app-debug.apk app_process ./ com.genymobile.scrcpy.Server 0\"")
-	err := cmd.Run()
+func extractAPK(fileName string, destinationPath string) error {
+	// 读取嵌入的 APK 文件内容
+	content, err := Asset(fileName)
 	if err != nil {
-		fmt.Printf("无法启动InputManager：%s\n", err)
+		return err
+	}
+	// 将 APK 文件内容写入目标文件
+	err = ioutil.WriteFile(destinationPath, content, 0644)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func startInputManager() {
+	if err := extractAPK("inputManager.apk", "/data/local/tmp/inputManager.apk"); err != nil {
+		logger.Errorf("无法提取 APK 文件：%s\n", err)
+		return
+	}
+	cmd := exec.Command("app_process", ".", "com.genymobile.scrcpy.Server", "0")
+	cmd.Env = append(os.Environ(), "CLASSPATH=/data/local/tmp/inputManager.apk")
+	err := cmd.Start()
+	if err != nil {
+		logger.Errorf("无法启动InputManager：%s\n", err)
 		os.Exit(1)
+	} else {
+		logger.Info("InputManager已启动")
 	}
 }
 
-func stopInputManager(){
-	cmd := exec.Command("sh -c \"pkill -f com.genymobile.scrcpy.Server\"")
-	err := cmd.Run()
+func stopInputManager() {
+	cmd := exec.Command("pkill", "-f", "com.genymobile.scrcpy.Server")
+	cmd.Run()
 }
-
-
 
 func handel_touch_using_input_manager() touch_control_func {
 	unixAddr, err := net.ResolveUnixAddr("unix", "@uds_input_manager")
@@ -34,7 +53,7 @@ func handel_touch_using_input_manager() touch_control_func {
 	unixListener, _ := net.ListenUnix("unix", unixAddr)
 
 	logger.Info("waiting for input manager to connect")
-	go startInputManager()
+	startInputManager()
 	unixConn, _ := unixListener.AcceptUnix()
 
 	logger.Info("input manager connected")
