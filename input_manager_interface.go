@@ -5,7 +5,25 @@ import (
 	"encoding/binary"
 	"net"
 	"os"
+	"time"
 )
+
+func startInputManager(){
+	time.sleep(time.Second * 1)
+	cmd := exec.Command("sh -c \"CLASSPATH=/data/local/tmp/app-debug.apk app_process ./ com.genymobile.scrcpy.Server 0\"")
+	err := cmd.Run()
+	if err != nil {
+		fmt.Printf("无法启动InputManager：%s\n", err)
+		os.Exit(1)
+	}
+}
+
+func stopInputManager(){
+	cmd := exec.Command("sh -c \"pkill -f com.genymobile.scrcpy.Server\"")
+	err := cmd.Run()
+}
+
+
 
 func handel_touch_using_input_manager() touch_control_func {
 	unixAddr, err := net.ResolveUnixAddr("unix", "@uds_input_manager")
@@ -16,6 +34,7 @@ func handel_touch_using_input_manager() touch_control_func {
 	unixListener, _ := net.ListenUnix("unix", unixAddr)
 
 	logger.Info("waiting for input manager to connect")
+	go startInputManager()
 	unixConn, _ := unixListener.AcceptUnix()
 
 	logger.Info("input manager connected")
@@ -23,6 +42,7 @@ func handel_touch_using_input_manager() touch_control_func {
 
 	go func() {
 		<-global_close_signal
+		stopInputManager()
 		unixConn.Close()
 		unixListener.Close()
 	}()
