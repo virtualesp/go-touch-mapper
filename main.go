@@ -48,7 +48,7 @@ func create_event_reader(indexes map[int]bool) chan *event_pack {
 	reader := func(event_reader chan *event_pack, index int) {
 		fd, err := os.OpenFile(fmt.Sprintf("/dev/input/event%d", index), os.O_RDONLY, 0)
 		if err != nil {
-			logger.Errorf("create_event_reader error:%v", err)
+			logger.Errorf("读取设备失败 : %v", err)
 			return
 		}
 		d := evdev.Open(fd)
@@ -62,11 +62,11 @@ func create_event_reader(indexes map[int]bool) chan *event_pack {
 		for {
 			select {
 			case <-global_close_signal:
-				logger.Infof("释放设备 : %s  ", dev_name)
+				logger.Infof("释放设备 : %s", dev_name)
 				return
 			case event := <-event_ch:
 				if event == nil {
-					logger.Warnf("null event from %s , reader stopped !", dev_name)
+					logger.Warnf("已停止读取异常设备 : %s", dev_name)
 					return
 				} else if event.Type == evdev.SyncReport {
 					pack := &event_pack{
@@ -95,7 +95,7 @@ func udp_event_injector(ch chan *event_pack, port int) {
 		Port: port,
 	})
 	if err != nil {
-		logger.Errorf("udp error %v", err)
+		logger.Errorf("udp error : %v", err)
 		return
 	}
 	defer listen.Close()
@@ -171,7 +171,7 @@ func listen_device_orientation() {
 			var now_orientation int32 = get_device_orientation()
 			if global_device_orientation != now_orientation {
 				global_device_orientation = now_orientation
-				logger.Debugf("orientation changed\t[%d] ", now_orientation)
+				logger.Debugf("设备方向改变\t[%d]", now_orientation)
 			}
 			time.Sleep(time.Duration(1) * time.Second)
 		}
@@ -257,7 +257,7 @@ func get_possible_device_indexes() map[int]dev_type {
 		index, _ := strconv.Atoi(file.Name()[5:])
 		fd, err := os.OpenFile(fmt.Sprintf("/dev/input/%s", file.Name()), os.O_RDONLY, 0)
 		if err != nil {
-			logger.Errorf("open dev error:%v", err)
+			logger.Errorf("读取设备/dev/input/%s失败 : %v ", file.Name(), err)
 		}
 		d := evdev.Open(fd)
 		defer d.Close()
@@ -272,7 +272,7 @@ func get_possible_device_indexes() map[int]dev_type {
 func get_dev_name_by_index(index int) string {
 	fd, err := os.OpenFile(fmt.Sprintf("/dev/input/event%d", index), os.O_RDONLY, 0)
 	if err != nil {
-		return "read name error"
+		return "读取设备名称失败"
 	}
 	d := evdev.Open(fd)
 	defer d.Close()
