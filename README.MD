@@ -35,11 +35,14 @@ CGO_ENABLE=0 GOOS=linux go build -ldflags="-s -w"
 ## Help
 
 ```
-usage: go-touch-mappeer [-h|--help] [-a|--auto-detect] [--create-js-info]
-                        [-e|--event] [-t|--touch <integer>] [-c|--config
-                        "<value>"] [-i|--inputManager] [-r|--remoteControl]
-                        [-p|--port <integer>] [-v|--v-mouse] [--auto-release
-                        <integer>] [--measure-mode] [-d|--debug_mode]
+usage: go-touch-mapper [-h|--help] [-a|--auto-detect] [--create-js-info]
+                       [-e|--event] [-t|--touch-disabled] [-c|--config
+                       "<value>"] [-i|--inputManager <integer>]
+                       [-r|--remoteControl] [-p|--port <integer>]
+                       [-v|--v-mouse] [--auto-release <integer>]
+                       [--measure-mode] [-d|--debug_mode]
+
+
 
 Arguments:
 
@@ -47,12 +50,10 @@ Arguments:
   -a  --auto-detect     自动检测设备. Default: false
       --create-js-info  创建手柄配置文件. Default: false
   -e  --event           键盘或鼠标或手柄的设备号
-  -t  --touch
-                        触屏设备号,可选,当指定时可同时使用映射与触屏而不冲突.
-                        Default: -1
+  -t  --touch-disabled  关闭触屏混合. Default: false
   -c  --config          配置文件路径
-  -i  --inputManager    是否使用inputManager,需开启额外控制进程.
-                        Default: false
+  -i  --inputManager    使用inputManager控制触摸,需指定DisplayID.
+                        Default: -1
   -r  --remoteControl   是否从UDP接收远程事件. Default: false
   -p  --port            指定监听远程事件的UDP端口号. Default: 61069
   -v  --v-mouse
