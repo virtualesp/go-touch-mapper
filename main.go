@@ -423,10 +423,6 @@ func auto_detect_and_read(event_chan chan *event_pack) {
 }
 
 func main() {
-	// test()
-	// fmt.Printf("====================")
-	// chan_test()
-	// return
 	parser := argparse.NewParser("go-touch-mapper", " ")
 
 	var create_js_info *bool = parser.Flag("", "create-js-info", &argparse.Options{
