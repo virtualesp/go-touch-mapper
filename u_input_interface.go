@@ -109,7 +109,7 @@ func create_u_input_mouse_keyboard() *os.File {
 	}
 
 	uiDev := UinputUserDev{
-		Name: toUInputName([]byte("v_keyboard_mouse")),
+		Name: toUInputName([]byte("go-touch-mapper-virtual-device")),
 		ID: InputID{
 			BusType: 0,
 			Vendor:  randUInt16Num(0x2000),

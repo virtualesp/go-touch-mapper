@@ -44,49 +44,41 @@ type u_input_control_pack struct {
 
 type touch_control_func func(data touch_control_pack)
 
-func create_event_reader(indexes map[int]bool) chan *event_pack {
-	reader := func(event_reader chan *event_pack, index int) {
-		fd, err := os.OpenFile(fmt.Sprintf("/dev/input/event%d", index), os.O_RDONLY, 0)
-		if err != nil {
-			logger.Errorf("读取设备失败 : %v", err)
+func dev_reader(event_reader chan *event_pack, index int) {
+	fd, err := os.OpenFile(fmt.Sprintf("/dev/input/event%d", index), os.O_RDONLY, 0)
+	if err != nil {
+		logger.Errorf("读取设备失败 : %v", err)
+		return
+	}
+	d := evdev.Open(fd)
+	defer d.Close()
+	event_ch := d.Poll(context.Background())
+	events := make([]*evdev.Event, 0)
+	dev_name := d.Name()
+	logger.Infof("开始读取设备 : %s", dev_name)
+	d.Lock()
+	defer d.Unlock()
+	for {
+		select {
+		case <-global_close_signal:
+			logger.Infof("释放设备 : %s", dev_name)
 			return
-		}
-		d := evdev.Open(fd)
-		defer d.Close()
-		event_ch := d.Poll(context.Background())
-		events := make([]*evdev.Event, 0)
-		dev_name := d.Name()
-		logger.Infof("开始读取设备 : %s", dev_name)
-		d.Lock()
-		defer d.Unlock()
-		for {
-			select {
-			case <-global_close_signal:
-				logger.Infof("释放设备 : %s", dev_name)
+		case event := <-event_ch:
+			if event == nil {
+				logger.Warnf("移除设备 : %s", dev_name)
 				return
-			case event := <-event_ch:
-				if event == nil {
-					logger.Warnf("已停止读取异常设备 : %s", dev_name)
-					return
-				} else if event.Type == evdev.SyncReport {
-					pack := &event_pack{
-						dev_name: dev_name,
-						events:   events,
-					}
-					event_reader <- pack
-					events = make([]*evdev.Event, 0)
-				} else {
-					events = append(events, &event.Event)
+			} else if event.Type == evdev.SyncReport {
+				pack := &event_pack{
+					dev_name: dev_name,
+					events:   events,
 				}
+				event_reader <- pack
+				events = make([]*evdev.Event, 0)
+			} else {
+				events = append(events, &event.Event)
 			}
 		}
-
 	}
-	event_reader := make(chan *event_pack)
-	for index, _ := range indexes {
-		go reader(event_reader, index)
-	}
-	return event_reader
 }
 
 func udp_event_injector(ch chan *event_pack, port int) {
@@ -241,7 +233,7 @@ func check_dev_type(dev *evdev.Evdev) dev_type {
 	return type_unknown
 }
 
-func get_possible_device_indexes() map[int]dev_type {
+func get_possible_device_indexes(skipList map[int]bool) map[int]dev_type {
 	files, _ := ioutil.ReadDir("/dev/input")
 	result := make(map[int]dev_type)
 	for _, file := range files {
@@ -255,15 +247,20 @@ func get_possible_device_indexes() map[int]dev_type {
 			continue
 		}
 		index, _ := strconv.Atoi(file.Name()[5:])
-		fd, err := os.OpenFile(fmt.Sprintf("/dev/input/%s", file.Name()), os.O_RDONLY, 0)
-		if err != nil {
-			logger.Errorf("读取设备/dev/input/%s失败 : %v ", file.Name(), err)
-		}
-		d := evdev.Open(fd)
-		defer d.Close()
-		devType := check_dev_type(d)
-		if devType != type_unknown {
-			result[index] = devType
+		reading, exist := skipList[index]
+		if exist && reading {
+			continue
+		} else {
+			fd, err := os.OpenFile(fmt.Sprintf("/dev/input/%s", file.Name()), os.O_RDONLY, 0)
+			if err != nil {
+				logger.Errorf("读取设备/dev/input/%s失败 : %v ", file.Name(), err)
+			}
+			d := evdev.Open(fd)
+			defer d.Close()
+			devType := check_dev_type(d)
+			if devType != type_unknown {
+				result[index] = devType
+			}
 		}
 	}
 	return result
@@ -296,7 +293,7 @@ func execute_view_move(handelerInstance *TouchHandler, x, stepValue, sleepMS int
 	if x > 0 {
 		steps := x / stepValue
 		for i := 0; i < steps; i++ {
-			if handelerInstance.map_on == false {
+			if !handelerInstance.map_on {
 				break
 			}
 			handelerInstance.handel_view_move(int32(stepValue), 0)
@@ -306,7 +303,7 @@ func execute_view_move(handelerInstance *TouchHandler, x, stepValue, sleepMS int
 	} else {
 		steps := -x / stepValue
 		for i := 0; i < steps; i++ {
-			if handelerInstance.map_on == false {
+			if !handelerInstance.map_on {
 				break
 			}
 			handelerInstance.handel_view_move(-int32(stepValue), 0)
@@ -359,7 +356,7 @@ func stdin_control_view_move(handelerInstance *TouchHandler) {
 		} else {
 			logger.Info("等待映射开关打开中...")
 			for {
-				if handelerInstance.map_on == false {
+				if !handelerInstance.map_on {
 					time.Sleep(time.Duration(100) * time.Millisecond)
 				} else {
 					execute_view_move(handelerInstance, x, stepValue, sleepMS)
@@ -389,29 +386,39 @@ func get_MT_size(indexes map[int]bool) (int32, int32) { //获取MTPositionX和MT
 	return int32(1), int32(1)
 }
 
-func test() {
-	for i := 0; i < 16; i++ {
-		start := time.Now()
-		end := time.Now()
-		cost := end.Nanosecond() - start.Nanosecond()
-		fmt.Printf("cost : %v ns\n", cost)
-	}
-
-}
-
-func chan_test() {
-	ch := make(chan time.Time)
-	go func() {
-		for i := 0; i < 16; i++ {
-			start := <-ch
-			end := time.Now()
-			cost := end.Nanosecond() - start.Nanosecond()
-			fmt.Printf("cost : %v ns\n", cost)
+func auto_detect_and_read(event_chan chan *event_pack) {
+	//自动检测设备并读取 循环检测 自动管理设备插入移除
+	devices := make(map[int]bool)
+	for {
+		select {
+		case <-global_close_signal:
+			return
+		default:
+			auto_detect_result := get_possible_device_indexes(devices)
+			devTypeFriendlyName := map[dev_type]string{
+				type_mouse:    "鼠标",
+				type_keyboard: "键盘",
+				type_joystick: "手柄",
+				type_touch:    "触屏",
+				type_unknown:  "未知",
+			}
+			for index, devType := range auto_detect_result {
+				devName := get_dev_name_by_index(index)
+				if devName == "go-touch-mapper-virtual-device" {
+					continue //跳过生成的虚拟设备
+				}
+				if devType == type_mouse || devType == type_keyboard || devType == type_joystick {
+					logger.Infof("检测到设备 %s(/dev/input/event%d) : %s", devName, index, devTypeFriendlyName[devType])
+					localIndex := index
+					go func() {
+						devices[localIndex] = true
+						dev_reader(event_chan, localIndex)
+						devices[localIndex] = false
+					}()
+				}
+			}
+			time.Sleep(time.Duration(400) * time.Millisecond)
 		}
-	}()
-	for i := 0; i < 16; i++ {
-		time.Sleep(10 * time.Duration(time.Millisecond))
-		ch <- time.Now()
 	}
 }
 
@@ -421,36 +428,28 @@ func main() {
 	// chan_test()
 	// return
 	parser := argparse.NewParser("go-touch-mapper", " ")
-	var auto_detect *bool = parser.Flag("a", "auto-detect", &argparse.Options{
-		Required: false,
-		Default:  false,
-		Help:     "自动检测设备",
-	})
 
 	var create_js_info *bool = parser.Flag("", "create-js-info", &argparse.Options{
 		Required: false,
 		Default:  false,
-		Help:     "创建手柄配置文件",
+		Help:     "创建手柄配置文件模式",
 	})
 
-	var eventList *[]int = parser.IntList("e", "event", &argparse.Options{
-		Required: false,
-		Help:     "键盘或鼠标或手柄的设备号",
-	})
-	var mixTouchDisabled *bool = parser.Flag("t", "touch-disabled", &argparse.Options{
-		Required: false,
-		Help:     "关闭触屏混合",
-		Default:  false,
-	})
 	var configPath *string = parser.String("c", "config", &argparse.Options{
 		Required: false,
 		Help:     "配置文件路径",
 	})
 
+	var mixTouchDisabled *bool = parser.Flag("t", "touch-disabled", &argparse.Options{
+		Required: false,
+		Help:     "关闭触屏混合",
+		Default:  false,
+	})
+
 	var usingInputManagerID *int = parser.Int("i", "inputManager", &argparse.Options{
 		Required: false,
 		Default:  -1,
-		Help:     "使用inputManager控制触摸,需指定DisplayID",
+		Help:     "使用inputManager控制触摸 适配多显示器 指定DisplayID",
 	})
 
 	var using_remote_control *bool = parser.Flag("r", "remoteControl", &argparse.Options{
@@ -499,9 +498,8 @@ func main() {
 		logger.Debug("debug on")
 	}
 
-	auto_detect_result := make(map[int]dev_type)
-	if *auto_detect {
-		auto_detect_result = get_possible_device_indexes()
+	if *create_js_info {
+		auto_detect_result := get_possible_device_indexes(make(map[int]bool))
 		devTypeFriendlyName := map[dev_type]string{
 			type_mouse:    "鼠标",
 			type_keyboard: "键盘",
@@ -513,59 +511,49 @@ func main() {
 			devName := get_dev_name_by_index(index)
 			logger.Infof("检测到设备 %s(/dev/input/event%d) : %s", devName, index, devTypeFriendlyName[devType])
 		}
-	}
-	if *create_js_info {
-		if *auto_detect {
-			js_events := make([]int, 0)
-			for index, devType := range auto_detect_result {
-				if devType == type_joystick {
-					js_events = append(js_events, index)
-				}
+		js_events := make([]int, 0)
+		for index, devType := range auto_detect_result {
+			if devType == type_joystick {
+				js_events = append(js_events, index)
 			}
-			if len(js_events) == 1 {
-				create_js_info_file(js_events[0])
-			} else {
-				if len(js_events) == 0 {
-					logger.Warn("未自动检测到手柄,请手动指定")
-				} else {
-					logger.Warn("检测到多个手柄,无法使用 -a 自动检测,请使用 -e 手动指定")
-				}
-			}
+		}
+		if len(js_events) == 1 {
+			create_js_info_file(js_events[0])
 		} else {
-			if len(*eventList) == 0 {
-				logger.Warn("请至少指定一个设备号")
-			} else if len(*eventList) > 1 {
-				logger.Warn("最多只能指定一个设备号")
+			if len(js_events) == 0 {
+				logger.Warn("未检测到手柄")
 			} else {
-				create_js_info_file((*eventList)[0])
+				logger.Warn("检测到多个手柄,断开其他手柄的连接")
 			}
 		}
 	} else {
-		eventSet := make(map[int]bool)
-		for _, index := range *eventList {
-			eventSet[index] = true
-		}
-		for k, v := range auto_detect_result {
-			if v == type_joystick || v == type_keyboard || v == type_mouse {
-				eventSet[k] = true
-			}
-		}
-		events_ch := create_event_reader(eventSet)
+		events_ch := make(chan *event_pack) //主要设备事件管道
 
 		u_input_control_ch := make(chan *u_input_control_pack)
 		fileted_u_input_control_ch := make(chan *u_input_control_pack)
 		touch_event_ch := make(chan *event_pack)
 		max_mt_x, max_mt_y := int32(1), int32(1)
+
 		if !*mixTouchDisabled {
-			for k, v := range auto_detect_result {
-				if v == type_touch {
-					logger.Infof("启用触屏混合 : event%d", k)
-					touch_event_ch = create_event_reader(map[int]bool{k: true})
-					max_mt_x, max_mt_y = get_MT_size(map[int]bool{k: true})
+			devTypeFriendlyName := map[dev_type]string{
+				type_mouse:    "鼠标",
+				type_keyboard: "键盘",
+				type_joystick: "手柄",
+				type_touch:    "触屏",
+				type_unknown:  "未知",
+			}
+			for index, devType := range get_possible_device_indexes(make(map[int]bool)) {
+				if devType == type_touch {
+					devName := get_dev_name_by_index(index)
+					logger.Infof("启用触屏混合 %s(/dev/input/event%d) : %s", devName, index, devTypeFriendlyName[devType])
+					go dev_reader(touch_event_ch, index)
+					max_mt_x, max_mt_y = get_MT_size(map[int]bool{index: true})
 					break
 				}
 			}
 		}
+
+		go auto_detect_and_read(events_ch)
 
 		go listen_device_orientation()
 

@@ -1,6 +1,6 @@
 # 安卓触屏映射工具
 
-将手柄,键鼠操作映射为触屏事件
+读取手柄，键盘，鼠标，触摸屏等输入并转换为虚拟触屏设备输出
 
 ## Quick start
 
@@ -35,34 +35,31 @@ CGO_ENABLE=0 GOOS=linux go build -ldflags="-s -w"
 ## Help
 
 ```
-usage: go-touch-mapper [-h|--help] [-a|--auto-detect] [--create-js-info]
-                       [-e|--event] [-t|--touch-disabled] [-c|--config
-                       "<value>"] [-i|--inputManager <integer>]
+usage: go-touch-mapper [-h|--help] [--create-js-info] [-c|--config "<value>"]
+                       [-t|--touch-disabled] [-i|--inputManager <integer>]
                        [-r|--remoteControl] [-p|--port <integer>]
                        [-v|--v-mouse] [--auto-release <integer>]
                        [--measure-mode] [-d|--debug_mode]
 
-
+                        
 
 Arguments:
 
   -h  --help            Print help information
-  -a  --auto-detect     自动检测设备. Default: false
-      --create-js-info  创建手柄配置文件. Default: false
-  -e  --event           键盘或鼠标或手柄的设备号
-  -t  --touch-disabled  关闭触屏混合. Default: false
+      --create-js-info  创建手柄配置文件模式. Default: false
   -c  --config          配置文件路径
-  -i  --inputManager    使用inputManager控制触摸,需指定DisplayID.
-                        Default: -1
+  -t  --touch-disabled  关闭触屏混合. Default: false
+  -i  --inputManager    使用inputManager控制触摸 适配多显示器
+                        指定DisplayID. Default: -1
   -r  --remoteControl   是否从UDP接收远程事件. Default: false
   -p  --port            指定监听远程事件的UDP端口号. Default: 61069
-  -v  --v-mouse
+  -v  --v-mouse        
                         用触摸操作模拟鼠标,需要额光标外显示程序.
                         Default: false
-      --auto-release
+      --auto-release   
                         触发视角自动释放所需的静止ms数,50ms为检查单位,置0禁用.
                         Default: 200
-      --measure-mode
+      --measure-mode   
                         显示视角移动像素计数,且可输入数值模拟滑动,方向键可微调.
                         Default: false
   -d  --debug_mode      打印debug信息. Default: false
@@ -70,24 +67,8 @@ Arguments:
 ## Example
 
 ```
-touchScreen /dev/input/event5
-mouse /dev/input/event15
-keyboard /dev/input/event19
-joystick /dev/input/event16
-configFile SMC_JS.json 
+go-touch-mapper -c configs/SMC_JS.json
 ```
-
-手动指定每个设备号
-```
-go-touch-mapper -t 5 -e 15 -e 19 -e 16 -c configs/SMC_JS.json  
-```
-或者使用自动检测
-```
-go-touch-mapper -a -c configs/SMC_JS.json
-```
-大多数情况下，如果你使用了 -a 来自动检测，那么便无需输入 -e 与 -t ，程序会尝试自动检测对应的设备
-
-如果自动检测漏掉了某些设备，你仍然可以使用 -e 与 -t 来手动添加它们
 
 ## 映射开关
 默认键盘使用 ` 键，可在配置文件中修改，手柄为SELECT+RS组合键
@@ -106,6 +87,15 @@ go-touch-mapper -a -c configs/SMC_JS.json
 实际计算输出为 int( Speed * 256 * real_move ) 
 
 虚拟触屏的大小为原始屏幕尺寸的256倍，以此解决缩放时慢速移动累计精度丢失的问题
+
+## 触屏混合
+
+程序会创建额外的uinput虚拟触屏来进行输入，默认会识别并读取机器物理触屏输入，与键鼠混合后使用虚拟触屏输出
+
+这样可以实现设备输入时，点击屏幕不中断
+
+如不需要此功能，使用-t即可不读取物理触屏
+
 
 ## 手柄支持
 joystickInfos文件夹下json文件为手柄配置文件
@@ -132,7 +122,7 @@ go-touch-mapper --create-js-info -a
 
 ## 远程控制
 ```
-go-touch-mapper -t 5 -c configs/SMC_JS.json -r
+go-touch-mapper -c configs/SMC_JS.json -r
 ```
 PC上 修改remote_control中sender("192.168.1.64:61069")为手机IP，端口默认可不修改
 
