@@ -2,6 +2,8 @@
 
 读取手柄，键盘，鼠标，触摸屏等输入并转换为虚拟触屏设备输出
 
+[视频教程](https://www.bilibili.com/video/BV1XtgeztEvY/)
+
 ## Quick start
 
 从release直接下载编译好的二进制程序
@@ -79,6 +81,8 @@ go-touch-mapper -c configs/SMC_JS.json
 如有需要，可参照[EXAMPLE.JSON](https://github.com/RiderLty/go-touch-mapper/blob/main/configs/EXAMPLE.JSON)手动修改配置文件
 
 可自动检测屏幕旋转方向，始终以左上角为原点，向右为X，向下为Y
+
+数字8、9、0分别对应鼠标左键、中键、右键
 
 按住键盘按键后，点击即可添加按键映射
 
