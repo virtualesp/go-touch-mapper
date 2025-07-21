@@ -78,6 +78,9 @@ go-touch-mapper -c configs/SMC_JS.json
 ## 配置文件
 [创建映射文件工具](https://riderlty.github.io/go-touch-mapper/)
 
+也可以使用程序自带的```http://[ip]:61070/```，可直接截取手机屏幕。
+
+
 如有需要，可参照[EXAMPLE.JSON](https://github.com/RiderLty/go-touch-mapper/blob/main/configs/EXAMPLE.JSON)手动修改配置文件
 
 可自动检测屏幕旋转方向，始终以左上角为原点，向右为X，向下为Y

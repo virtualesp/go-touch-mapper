@@ -27,7 +27,26 @@ function copyToClipboard(text) {
 
 
 
-const UploadButton = (props) => {
+const UploadButton = ({ onClick }) => {
+    return <button
+        style={{
+            position: 'absolute',
+            width: '200px',
+            height: '80px',
+            left: '50%',
+            marginLeft: '-105px',
+            top: 'calc(50% - 100px)',
+            borderRadius: '50px',
+            border: "5px solid #00b894",
+            transition: ".25s",
+            fontSize: '24px',
+            background: "#2C3A47",
+            color: "white",
+        }}
+        onClick={onClick}>上传图片</button>
+}
+
+const UploadButtonJIETU = ({ onClick }) => {
     return <button
         style={{
             position: 'absolute',
@@ -43,8 +62,31 @@ const UploadButton = (props) => {
             background: "#2C3A47",
             color: "white",
         }}
-        onClick={props.onClick}>上传截图</button>
+        onClick={onClick}>屏幕截图</button>
 }
+
+
+
+const UploadButton5s = ({ onClick }) => {
+    return <button
+        style={{
+            position: 'absolute',
+            width: '200px',
+            height: '80px',
+            left: '50%',
+            marginLeft: '-105px',
+            top: 'calc(50% + 100px)',
+            borderRadius: '50px',
+            border: "5px solid #00b894",
+            transition: ".25s",
+            fontSize: '24px',
+            background: "#2C3A47",
+            color: "white",
+        }}
+        onClick={onClick}>5s后截图</button>
+}
+
+
 
 const FixedIcon = (props) => {
     return <button
@@ -400,6 +442,7 @@ export default function Manager() {
         };
     }
 
+
     const handelKeyMapChange = (key, obj) => {
         console.log("handelKeyMapChange", key, obj);
         let index = -1;
@@ -528,7 +571,7 @@ export default function Manager() {
             <a> ms</a>
         </div>
     }
-    
+
     const Type_drag = (props) => {
         const waitingForClick = useRef(false)
         const [addButtonDisabled, setAddButtonDisabled] = useState(false)
@@ -688,7 +731,7 @@ export default function Manager() {
             direction="column"
             padding="10px"
         >
-            <Grid 
+            <Grid
                 container
                 direction="row"
                 justifyContent="flex-start"
@@ -791,7 +834,11 @@ export default function Manager() {
     }}>
         <JoystickListener setDowningBtn={(value) => { downingBtn.current = value }} />
         <input id="fileInput" type="file" style={{ display: "none" }} accept="image/*" onChange={handleFileChange} ></input>
-        {uploadButton ? <UploadButton onClick={() => { document.getElementById('fileInput').click(); }} /> : null}
+        {uploadButton ? <>
+            <UploadButton onClick={() => { document.getElementById('fileInput').click(); }} />
+            <UploadButtonJIETU onClick={() => {setUploadButton(false) ; setImgUrl("/screen.png")}} />
+            <UploadButton5s onClick={() => {setUploadButton(false)  ; setTimeout( () => {setImgUrl("/screen.png");} , 5000 ) }} />
+        </> : null}
         {imgUrl ? <img id="img" src={imgUrl} style={{ width: "100vw", left: 0, top: 0 }} onClick={handelImgClick}  ></img> : null}
         {imgUrl ? <DraggableContainer><ControlPanel /></DraggableContainer> : null}
         {

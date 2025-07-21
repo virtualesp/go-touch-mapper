@@ -425,15 +425,15 @@ func auto_detect_and_read(event_chan chan *event_pack) {
 func main() {
 	parser := argparse.NewParser("go-touch-mapper", " ")
 
+	var configPath *string = parser.String("c", "config", &argparse.Options{
+		Required: false,
+		Help:     "配置文件路径",
+	})
+
 	var create_js_info *bool = parser.Flag("", "create-js-info", &argparse.Options{
 		Required: false,
 		Default:  false,
 		Help:     "创建手柄配置文件模式",
-	})
-
-	var configPath *string = parser.String("c", "config", &argparse.Options{
-		Required: false,
-		Help:     "配置文件路径",
 	})
 
 	var mixTouchDisabled *bool = parser.Flag("t", "touch-disabled", &argparse.Options{
@@ -601,6 +601,8 @@ func main() {
 		if *measure_sensitivity_mode {
 			go stdin_control_view_move(touchHandler)
 		}
+
+		go serve() //启动服务器
 
 		exitChan := make(chan os.Signal)
 		signal.Notify(exitChan, os.Interrupt, os.Kill, syscall.SIGTERM)
