@@ -14,7 +14,7 @@ jobs:
     - name: downmload assets arm64
       run: wget https://github.com/RiderLty/go-touch-mapper/releases/latest/download/go-touch-mapper_arm64 -O go-touch-mapper_arm64 
 
-    - name: Upload to WebDAV
+    - name: Upload to WebDAV 1
       uses: bxb100/action-upload@main
       with:
         provider: webdav
@@ -23,4 +23,15 @@ jobs:
           username=${{ secrets.WEBDAV_USERNAME }}
           password=${{ secrets.WEBDAV_PASSWORD }}
           root=/direct/projects/go-touch-mapper/build
-        include: './go-touch-mapper-a*'
+        include: 'go-touch-mapper_amd64'
+    
+    - name: Upload to WebDAV 2
+      uses: bxb100/action-upload@main
+      with:
+        provider: webdav
+        provider_options: |
+          endpoint=${{ secrets.WEBDAV_ENDPOINT }}
+          username=${{ secrets.WEBDAV_USERNAME }}
+          password=${{ secrets.WEBDAV_PASSWORD }}
+          root=/direct/projects/go-touch-mapper/build
+        include: 'go-touch-mapper_arm64'
