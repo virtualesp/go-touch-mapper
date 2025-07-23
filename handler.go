@@ -28,12 +28,14 @@ type TouchHandler struct {
 	joystickInfo             map[string]*simplejson.Json //所有摇杆配置文件 dev_name 为key
 	screen_x                 int32                       //屏幕宽度
 	screen_y                 int32                       //屏幕高度
-	view_init_x              int32                       //初始化视角映射的x坐标
-	view_init_y              int32                       //初始化视角映射的y坐标
-	view_current_x           int32                       //当前视角映射的x坐标
-	view_current_y           int32                       //当前视角映射的y坐标
-	view_speed_x             int32                       //视角x方向的速度
-	view_speed_y             int32                       //视角y方向的速度
+	rel_screen_x             int32
+	rel_screen_y             int32
+	view_init_x              int32 //初始化视角映射的x坐标
+	view_init_y              int32 //初始化视角映射的y坐标
+	view_current_x           int32 //当前视角映射的x坐标
+	view_current_y           int32 //当前视角映射的y坐标
+	view_speed_x             int32 //视角x方向的速度
+	view_speed_y             int32 //视角y方向的速度
 	rs_speed_x               float64
 	rs_speed_y               float64
 	wheel_init_x             int32 //初始化左摇杆映射的x坐标
@@ -59,6 +61,8 @@ type TouchHandler struct {
 	measure_sensitivity_mode bool  //计算模式
 	total_move_x             int32 //视角总移动距离x
 	total_move_y             int32 //视角总移动距离y
+	wheel_shift_enable       bool
+	wheel_shift_range        int32
 }
 
 const (
@@ -169,6 +173,9 @@ func InitTouchHandler(
 	abs_last_map.Store("RS_X", 0.5)
 	abs_last_map.Store("RS_Y", 0.5)
 
+	screenSizeX := config_json.Get("SCREEN").Get("SIZE").GetIndex(0).MustInt()
+	screenSizeY := config_json.Get("SCREEN").Get("SIZE").GetIndex(1).MustInt()
+
 	return &TouchHandler{
 		events:             events,
 		touch_control_func: touch_control_func,
@@ -180,21 +187,23 @@ func InitTouchHandler(
 		// ^^^ 是可以创建超过12个的 只是不显示白点罢了
 		config:         config_json,
 		joystickInfo:   joystickInfo,
-		screen_x:       int32(config_json.Get("SCREEN").Get("SIZE").GetIndex(0).MustInt()) << touch_pos_scale,
-		screen_y:       int32(config_json.Get("SCREEN").Get("SIZE").GetIndex(1).MustInt()) << touch_pos_scale,
-		view_init_x:    int32(config_json.Get("MOUSE").Get("POS").GetIndex(0).MustInt()) << touch_pos_scale,
-		view_init_y:    int32(config_json.Get("MOUSE").Get("POS").GetIndex(1).MustInt()) << touch_pos_scale,
-		view_current_x: int32(config_json.Get("MOUSE").Get("POS").GetIndex(0).MustInt()) << touch_pos_scale,
-		view_current_y: int32(config_json.Get("MOUSE").Get("POS").GetIndex(1).MustInt()) << touch_pos_scale,
+		screen_x:       int32(screenSizeX << touch_pos_scale),
+		screen_y:       int32(screenSizeY << touch_pos_scale),
+		rel_screen_x:   int32(screenSizeX),
+		rel_screen_y:   int32(screenSizeY),
+		view_init_x:    int32(config_json.Get("MOUSE").Get("POS").GetIndex(0).MustFloat64() * float64(screenSizeX<<touch_pos_scale)),
+		view_init_y:    int32(config_json.Get("MOUSE").Get("POS").GetIndex(1).MustFloat64() * float64(screenSizeY<<touch_pos_scale)),
+		view_current_x: int32(config_json.Get("MOUSE").Get("POS").GetIndex(0).MustFloat64() * float64(screenSizeX<<touch_pos_scale)),
+		view_current_y: int32(config_json.Get("MOUSE").Get("POS").GetIndex(1).MustFloat64() * float64(screenSizeY<<touch_pos_scale)),
 		view_speed_x:   int32((1 << touch_pos_scale) * config_json.Get("MOUSE").Get("SPEED").GetIndex(0).MustFloat64()),
 		view_speed_y:   int32((1 << touch_pos_scale) * config_json.Get("MOUSE").Get("SPEED").GetIndex(1).MustFloat64()),
 		// rs_speed_x:     config_json.Get("MOUSE").Get("RS_SPEED").GetIndex(0).MustFloat64(),
 		// rs_speed_y:     config_json.Get("MOUSE").Get("RS_SPEED").GetIndex(1).MustFloat64(),
 		rs_speed_x:   32,
 		rs_speed_y:   32,
-		wheel_init_x: int32(config_json.Get("WHEEL").Get("POS").GetIndex(0).MustInt()),
-		wheel_init_y: int32(config_json.Get("WHEEL").Get("POS").GetIndex(1).MustInt()),
-		wheel_range:  int32(config_json.Get("WHEEL").Get("RANGE").MustInt()),
+		wheel_init_x: int32(config_json.Get("WHEEL").Get("POS").GetIndex(0).MustFloat64() * float64(screenSizeX)),
+		wheel_init_y: int32(config_json.Get("WHEEL").Get("POS").GetIndex(1).MustFloat64() * float64(screenSizeY)),
+		wheel_range:  int32(config_json.Get("WHEEL").Get("RANGE").MustFloat64() * float64(screenSizeX)),
 		wheel_wasd: []string{
 			config_json.Get("WHEEL").Get("WASD").GetIndex(0).MustString(),
 			config_json.Get("WHEEL").Get("WASD").GetIndex(1).MustString(),
@@ -209,23 +218,68 @@ func InitTouchHandler(
 		using_joystick_name:      "",
 		ls_wheel_released:        true,
 		wasd_wheel_released:      true,
-		wasd_wheel_last_x:        int32(config_json.Get("WHEEL").Get("POS").GetIndex(0).MustInt()),
-		wasd_wheel_last_y:        int32(config_json.Get("WHEEL").Get("POS").GetIndex(1).MustInt()),
-		wasd_up_down_statues:     make([]bool, 4),
+		wasd_wheel_last_x:        int32(config_json.Get("WHEEL").Get("POS").GetIndex(0).MustFloat64() * float64(screenSizeX)),
+		wasd_wheel_last_y:        int32(config_json.Get("WHEEL").Get("POS").GetIndex(1).MustFloat64() * float64(screenSizeY)),
+		wasd_up_down_statues:     make([]bool, 5), //放置wasd的状态与shift启用下，shift的状态
 		key_action_state_save:    sync.Map{},
 		BTN_SELECT_UP_DOWN:       0,
 		KEYBOARD_SWITCH_KEY_NAME: config_json.Get("MOUSE").Get("SWITCH_KEY").MustString(),
 		view_range_limited:       view_range_limited,
 		map_switch_signal:        map_switch_signal,
 		measure_sensitivity_mode: measure_sensitivity_mode,
+		wheel_shift_enable:       config_json.Get("WHEEL").Get("SHIFT_RANGE_ENABLE").MustBool(),
+		wheel_shift_range:        int32(config_json.Get("WHEEL").Get("SHIFT_RANGE").MustFloat64() * float64(screenSizeX)),
 	}
 }
 
+func (self *TouchHandler) reloadConfigure(mapperFilePath string) {
+	if self.map_on {
+		self.switch_map_mode()
+	}
+	if _, err := os.Stat(mapperFilePath); os.IsNotExist(err) {
+		logger.Errorf("没有找到映射配置文件 : %s ", mapperFilePath)
+		os.Exit(1)
+	} else {
+		logger.Infof("使用映射配置文件 : %s ", mapperFilePath)
+	}
+	content, _ := ioutil.ReadFile(mapperFilePath)
+	config_json, _ := simplejson.NewJson(content)
+	screenSizeX := config_json.Get("SCREEN").Get("SIZE").GetIndex(0).MustInt()
+	screenSizeY := config_json.Get("SCREEN").Get("SIZE").GetIndex(1).MustInt()
+	self.config = config_json
+	self.screen_x = int32(screenSizeX << touch_pos_scale)
+	self.screen_y = int32(screenSizeY << touch_pos_scale)
+	self.rel_screen_x = int32(screenSizeX)
+	self.rel_screen_y = int32(screenSizeY)
+	self.view_init_x = int32(config_json.Get("MOUSE").Get("POS").GetIndex(0).MustFloat64() * float64(screenSizeX<<touch_pos_scale))
+	self.view_init_y = int32(config_json.Get("MOUSE").Get("POS").GetIndex(1).MustFloat64() * float64(screenSizeY<<touch_pos_scale))
+	self.view_current_x = int32(config_json.Get("MOUSE").Get("POS").GetIndex(0).MustFloat64() * float64(screenSizeX<<touch_pos_scale))
+	self.view_current_y = int32(config_json.Get("MOUSE").Get("POS").GetIndex(1).MustFloat64() * float64(screenSizeY<<touch_pos_scale))
+	self.view_speed_x = int32((1 << touch_pos_scale) * config_json.Get("MOUSE").Get("SPEED").GetIndex(0).MustFloat64())
+	self.view_speed_y = int32((1 << touch_pos_scale) * config_json.Get("MOUSE").Get("SPEED").GetIndex(1).MustFloat64())
+	self.wheel_init_x = int32(config_json.Get("WHEEL").Get("POS").GetIndex(0).MustFloat64() * float64(screenSizeX))
+	self.wheel_init_y = int32(config_json.Get("WHEEL").Get("POS").GetIndex(1).MustFloat64() * float64(screenSizeY))
+	self.wheel_range = int32(config_json.Get("WHEEL").Get("RANGE").MustFloat64() * float64(screenSizeX))
+	self.wheel_wasd = []string{
+		config_json.Get("WHEEL").Get("WASD").GetIndex(0).MustString(),
+		config_json.Get("WHEEL").Get("WASD").GetIndex(1).MustString(),
+		config_json.Get("WHEEL").Get("WASD").GetIndex(2).MustString(),
+		config_json.Get("WHEEL").Get("WASD").GetIndex(3).MustString(),
+	}
+	self.wasd_wheel_last_x = int32(config_json.Get("WHEEL").Get("POS").GetIndex(0).MustFloat64() * float64(screenSizeX))
+	self.wasd_wheel_last_y = int32(config_json.Get("WHEEL").Get("POS").GetIndex(1).MustFloat64() * float64(screenSizeY))
+	self.KEYBOARD_SWITCH_KEY_NAME = config_json.Get("MOUSE").Get("SWITCH_KEY").MustString()
+	self.wheel_shift_enable = config_json.Get("WHEEL").Get("SHIFT_RANGE_ENABLE").MustBool()
+	self.wheel_shift_range = int32(config_json.Get("WHEEL").Get("SHIFT_RANGE").MustFloat64() * float64(screenSizeX))
+}
+
 func (self *TouchHandler) touch_require(x int32, y int32, scale uint8) int32 {
+
 	for i, v := range self.allocated_id {
 		if !v {
 			self.allocated_id[i] = true
 			self.send_touch_control_pack(TouchActionRequire, int32(i), x<<scale, y<<scale)
+			logger.Debugf("touch require (%v,%v) <= [%v]", x, y, i)
 			return int32(i)
 		}
 	}
@@ -233,6 +287,7 @@ func (self *TouchHandler) touch_require(x int32, y int32, scale uint8) int32 {
 }
 
 func (self *TouchHandler) touch_release(id int32) int32 {
+	logger.Debugf("touch release [%v]", id)
 	if id != -1 {
 		self.allocated_id[int(id)] = false
 		self.send_touch_control_pack(TouchActionRelease, id, -1, -1)
@@ -241,6 +296,7 @@ func (self *TouchHandler) touch_release(id int32) int32 {
 }
 
 func (self *TouchHandler) touch_move(id int32, x int32, y int32, scale uint8) {
+	logger.Debugf("touch move to (%v,%v) [%v]", x, y, id)
 	if id != -1 {
 		self.send_touch_control_pack(TouchActionMove, id, x<<scale, y<<scale)
 	}
@@ -382,10 +438,17 @@ func (self *TouchHandler) get_wasd_now_target() (int32, int32) { //根据wasd当
 		x += 1
 	}
 
+	wheel_range := self.wheel_range
+	if self.wasd_up_down_statues[4] {
+		wheel_range = self.wheel_shift_range
+	}
+
 	if x*y == 0 {
-		return self.wheel_init_x + x*self.wheel_range, self.wheel_init_y + y*self.wheel_range
+		// logger.Warnf("%v  %v", self.wheel_init_x+x*wheel_range, self.wheel_init_y+y*wheel_range)
+		return self.wheel_init_x + x*wheel_range, self.wheel_init_y + y*wheel_range
 	} else {
-		return self.wheel_init_x + x*self.wheel_range*707/1000, self.wheel_init_y + y*self.wheel_range*707/1000
+		// logger.Warnf("%v  %v", self.wheel_init_x+x*wheel_range*707/1000, self.wheel_init_y+y*wheel_range*707/1000)
+		return self.wheel_init_x + x*wheel_range*707/1000, self.wheel_init_y + y*wheel_range*707/1000
 	}
 }
 
@@ -477,8 +540,8 @@ func (self *TouchHandler) execute_key_action(start time.Time, key_name string, u
 	switch action.Get("TYPE").MustString() {
 	case "PRESS": //按键的按下与释放直接映射为触屏的按下与释放
 		if up_down == DOWN {
-			x := int32(action.Get("POS").GetIndex(0).MustInt()) + rand_offset()
-			y := int32(action.Get("POS").GetIndex(1).MustInt()) + rand_offset()
+			x := int32(action.Get("POS").GetIndex(0).MustFloat64()*float64(self.rel_screen_x)) + rand_offset()
+			y := int32(action.Get("POS").GetIndex(1).MustFloat64()*float64(self.rel_screen_y)) + rand_offset()
 			self.key_action_state_save.Store(key_name, self.touch_require(x, y, touch_pos_scale))
 		} else if up_down == UP {
 			tid := state.(int32)
@@ -487,8 +550,8 @@ func (self *TouchHandler) execute_key_action(start time.Time, key_name string, u
 		}
 	case "CLICK": //仅在按下的时候执行一次 不保存状态所以不响应down 也不会有down到这里
 		if up_down == DOWN {
-			x := int32(action.Get("POS").GetIndex(0).MustInt()) + rand_offset()
-			y := int32(action.Get("POS").GetIndex(1).MustInt()) + rand_offset()
+			x := int32(action.Get("POS").GetIndex(0).MustFloat64()*float64(self.rel_screen_x)) + rand_offset()
+			y := int32(action.Get("POS").GetIndex(1).MustFloat64()*float64(self.rel_screen_y)) + rand_offset()
 			// tid := self.require_id()
 			// self.touch_control(TouchActionRequire, tid, x, y)
 			tid := self.touch_require(x, y, touch_pos_scale)
@@ -500,8 +563,8 @@ func (self *TouchHandler) execute_key_action(start time.Time, key_name string, u
 
 	case "AUTO_FIRE": //连发 按下开始 松开结束 按照设置的间隔 持续点击
 		if up_down == DOWN {
-			x := int32(action.Get("POS").GetIndex(0).MustInt())
-			y := int32(action.Get("POS").GetIndex(1).MustInt())
+			x := int32(action.Get("POS").GetIndex(0).MustFloat64() * float64(self.rel_screen_x))
+			y := int32(action.Get("POS").GetIndex(1).MustFloat64() * float64(self.rel_screen_y))
 			down_time := action.Get("INTERVAL").GetIndex(0).MustInt()
 			interval_time := action.Get("INTERVAL").GetIndex(1).MustInt()
 			self.key_action_state_save.Store(key_name, true)
@@ -526,8 +589,8 @@ func (self *TouchHandler) execute_key_action(start time.Time, key_name string, u
 			release_signal := make(chan bool, 16)
 			self.key_action_state_save.Store(key_name, release_signal)
 			for i := range action.Get("POS_S").MustArray() {
-				x := int32(action.Get("POS_S").GetIndex(i).GetIndex(0).MustInt()) + rand_offset()
-				y := int32(action.Get("POS_S").GetIndex(i).GetIndex(1).MustInt()) + rand_offset()
+				x := int32(action.Get("POS_S").GetIndex(i).GetIndex(0).MustFloat64()*float64(self.rel_screen_x)) + rand_offset()
+				y := int32(action.Get("POS_S").GetIndex(i).GetIndex(1).MustFloat64()*float64(self.rel_screen_y)) + rand_offset()
 				tid := self.touch_require(x, y, touch_pos_scale)
 				tid_save = append(tid_save, tid)
 				time.Sleep(time.Duration(8) * time.Millisecond) // 间隔8ms 是否需要延迟有待验证
@@ -550,18 +613,18 @@ func (self *TouchHandler) execute_key_action(start time.Time, key_name string, u
 		if up_down == DOWN {
 			pos_len := len(action.Get("POS_S").MustArray())
 			interval_time := action.Get("INTERVAL").GetIndex(0).MustInt()
-			init_x := int32(action.Get("POS_S").GetIndex(0).GetIndex(0).MustInt())
-			init_y := int32(action.Get("POS_S").GetIndex(0).GetIndex(1).MustInt())
+			init_x := int32(action.Get("POS_S").GetIndex(0).GetIndex(0).MustFloat64() * float64(self.rel_screen_x))
+			init_y := int32(action.Get("POS_S").GetIndex(0).GetIndex(1).MustFloat64() * float64(self.rel_screen_y))
 			tid := self.touch_require(init_x, init_y, touch_pos_scale)
 			time.Sleep(time.Duration(interval_time) * time.Millisecond)
 			for index := 1; index < pos_len-1; index++ {
-				x := int32(action.Get("POS_S").GetIndex(index).GetIndex(0).MustInt()) + rand_offset()
-				y := int32(action.Get("POS_S").GetIndex(index).GetIndex(1).MustInt()) + rand_offset()
+				x := int32(action.Get("POS_S").GetIndex(index).GetIndex(0).MustFloat64()*float64(self.rel_screen_x)) + rand_offset()
+				y := int32(action.Get("POS_S").GetIndex(index).GetIndex(1).MustFloat64()*float64(self.rel_screen_y)) + rand_offset()
 				self.touch_move(tid, x, y, touch_pos_scale)
 				time.Sleep(time.Duration(interval_time) * time.Millisecond)
 			}
-			end_x := int32(action.Get("POS_S").GetIndex(pos_len - 1).GetIndex(0).MustInt())
-			end_y := int32(action.Get("POS_S").GetIndex(pos_len - 1).GetIndex(1).MustInt())
+			end_x := int32(action.Get("POS_S").GetIndex(pos_len-1).GetIndex(0).MustFloat64() * float64(self.rel_screen_x))
+			end_y := int32(action.Get("POS_S").GetIndex(pos_len-1).GetIndex(1).MustFloat64() * float64(self.rel_screen_y))
 			self.touch_move(tid, end_x, end_y, touch_pos_scale)
 			self.touch_release(tid)
 		} else if up_down == UP {
@@ -627,6 +690,15 @@ func (self *TouchHandler) handel_key_up_down(key_name string, up_down int32, dev
 				return
 			}
 		}
+		if self.wheel_shift_enable && key_name == "KEY_LEFTSHIFT" {
+			if up_down == DOWN {
+				self.wasd_up_down_statues[4] = true
+			} else if up_down == UP {
+				self.wasd_up_down_statues[4] = false
+			}
+			return
+		}
+
 		if self.measure_sensitivity_mode && up_down == UP {
 			if key_name == "KEY_LEFT" {
 				self.handel_view_move(-1, 0)
@@ -756,8 +828,12 @@ func (self *TouchHandler) handel_abs_events(events []*evdev.Event, dev_name stri
 						}
 					} else {
 						self.ls_wheel_released = false
-						target_x := self.wheel_init_x + int32(float64(self.wheel_range)*2*(ls_x-0.5)) //注意这里的X和Y是相反的
-						target_y := self.wheel_init_y + int32(float64(self.wheel_range)*2*(ls_y-0.5))
+						wheel_range := self.wheel_range
+						if self.wheel_shift_enable {
+							wheel_range = self.wheel_shift_range
+						}
+						target_x := self.wheel_init_x + int32(float64(wheel_range)*2*(ls_x-0.5)) //注意这里的X和Y是相反的
+						target_y := self.wheel_init_y + int32(float64(wheel_range)*2*(ls_y-0.5))
 						self.handel_wheel_action(Wheel_action_move, target_x, target_y)
 					}
 				}

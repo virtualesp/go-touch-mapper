@@ -10,7 +10,15 @@ import { useEffect, useRef, useState } from "react";
 import DraggableContainer from "./DraggableContainer";
 import JoystickListener from "./JoystickListener";
 import * as keyNameMap from "./keynamemap.json";
-
+import {
+    UploadButton,
+    UploadButtonJIETU,
+    UploadButton5s,
+    FixedIcon,
+    GroupFixedIcon,
+    CostumedInput,
+    WheelShow,
+} from "./UIcomponents"
 
 function copyToClipboard(text) {
     let transfer = document.createElement('input');
@@ -24,165 +32,6 @@ function copyToClipboard(text) {
     transfer.blur();
     document.body.removeChild(transfer);
 }
-
-
-
-const UploadButton = ({ onClick }) => {
-    return <button
-        style={{
-            position: 'absolute',
-            width: '200px',
-            height: '80px',
-            left: '50%',
-            marginLeft: '-105px',
-            top: 'calc(50% - 100px)',
-            borderRadius: '50px',
-            border: "5px solid #00b894",
-            transition: ".25s",
-            fontSize: '24px',
-            background: "#2C3A47",
-            color: "white",
-        }}
-        onClick={onClick}>上传图片</button>
-}
-
-const UploadButtonJIETU = ({ onClick }) => {
-    return <button
-        style={{
-            position: 'absolute',
-            width: '200px',
-            height: '80px',
-            left: '50%',
-            marginLeft: '-105px',
-            top: '50%',
-            borderRadius: '50px',
-            border: "5px solid #00b894",
-            transition: ".25s",
-            fontSize: '24px',
-            background: "#2C3A47",
-            color: "white",
-        }}
-        onClick={onClick}>屏幕截图</button>
-}
-
-
-
-const UploadButton5s = ({ onClick }) => {
-    return <button
-        style={{
-            position: 'absolute',
-            width: '200px',
-            height: '80px',
-            left: '50%',
-            marginLeft: '-105px',
-            top: 'calc(50% + 100px)',
-            borderRadius: '50px',
-            border: "5px solid #00b894",
-            transition: ".25s",
-            fontSize: '24px',
-            background: "#2C3A47",
-            color: "white",
-        }}
-        onClick={onClick}>5s后截图</button>
-}
-
-
-
-const FixedIcon = (props) => {
-    return <button
-        style={{
-            position: 'fixed',
-            left: props.x,
-            top: props.y,
-            width: props.size || 28,
-            height: props.size || 28,
-            borderRadius: props.size || 28,
-            backgroundColor: props.bgColor || "#d90051",
-            color: props.textColor || "white",
-            marginLeft: props.size / -2 || -14,
-            marginTop: props.size / -2 || -14,
-            border: "None",
-            alignItems: "center",
-            pointerEvents: "none",
-        }}
-    >
-        {props.text}
-    </button>
-}
-const GroupFixedIcon = (props) => {
-    return <div>
-        {
-            props.pos_s.map((pos, index) => <FixedIcon
-                key={index}
-                x={pos[0]}
-                y={pos[1]}
-                size={18}
-                bgColor={props.color[0]}
-                textColor={props.color[1]}
-                text={`${props.text}_${index}`}
-            />)
-        }
-    </div>
-}
-
-const CostumedInput = (props) => {
-    const [value, setValue] = useState(props.defaultValue)
-    return <Input
-        sx={{ width: props.width || "40px" }}
-        inputProps={{ inputMode: 'numeric', pattern: '[0-9]*' }}
-        value={value}
-        onChange={(e) => {
-            setValue(e.target.value.replace(/[^\d]/g, ""))
-        }}
-        onFocus={(e) => {
-            window.stopPreventDefault = true
-        }}
-        onBlur={(e) => {
-            window.stopPreventDefault = false
-            props.onCommit(Number(value))
-        }}
-        onKeyDown={(e) => {
-            if (e.key === "Enter") {
-                props.onCommit(Number(value))
-            }
-        }}
-    />
-}
-
-const WheelShow = (props) => {
-    const radius = props.data.range * 2
-    return <div>
-        <div style={{
-            position: 'fixed',
-            left: props.data.pos[0],
-            top: props.data.pos[1],
-            width: 16,
-            height: 16,
-            borderRadius: 16,
-            marginLeft: -8,
-            marginTop: -8,
-            backgroundColor: "#FF5722",
-            pointerEvents: "none",
-        }} />
-        <div style={{
-            position: 'fixed',
-            left: props.data.pos[0],
-            top: props.data.pos[1],
-            width: radius,
-            height: radius,
-            borderRadius: radius,
-            marginLeft: radius / -2 - 4,
-            marginTop: radius / -2 - 4,
-            border: "4px solid #FF5722",
-            pointerEvents: "none",
-        }} />
-    </div>
-}
-
-
-
-
-
 
 export default function Manager() {
     const [exportButtonText, setExportButtonText] = useState("导出")
@@ -224,6 +73,46 @@ export default function Manager() {
             ]
         }
     })
+
+
+
+    const [config, setConfig] = useState({
+        "SCREEN": {
+            "SIZE": [
+                3120,
+                1440
+            ]
+        },
+        "MOUSE": {
+            "SWITCH_KEY": "KEY_GRAVE",
+            "POS": [
+                1660,
+                720
+            ],
+            "SPEED": [
+                1,
+                1
+            ]
+        },
+        "WHEEL": {
+            "POS": [
+                400,
+                1040
+            ],
+            "RANGE": 300,
+            "WASD": [
+                "KEY_W",
+                "KEY_A",
+                "KEY_S",
+                "KEY_D"
+            ]
+        },
+        "KEY_MAPS": {
+        }
+    })
+
+
+
 
 
 
@@ -316,7 +205,6 @@ export default function Manager() {
         setTimeout(() => {
             setExportButtonText("导出")
         }, 1000)
-
     }
 
 
@@ -536,8 +424,8 @@ export default function Manager() {
     const KeyShow = (props) => {
         return <div>
             {props.data.type === "press" || props.data.type === "auto_fire" || props.data.type === "click" ? <FixedIcon x={props.data.x} y={props.data.y} text={props.data.key} /> : null}
-            {props.data.type === "mult_press" ? <GroupFixedIcon pos_s={props.data.pos_s} text={props.data.key} color={["#00796B", "#ffffff"]} /> : null}
-            {props.data.type === "drag" ? <GroupFixedIcon pos_s={props.data.pos_s} text={props.data.key} color={["#3F51B5", "#ffffff"]} /> : null}
+            {props.data.type === "mult_press" ? <GroupFixedIcon pos_s={props.data.pos_s} text={props.data.key} bgColor={"#00796B"} textColor={"#ffffff"} /> : null}
+            {props.data.type === "drag" ? <GroupFixedIcon pos_s={props.data.pos_s} text={props.data.key} bgColor={"#3F51B5"} textColor={"#ffffff"} /> : null}
         </div>
     }
 
@@ -773,8 +661,6 @@ export default function Manager() {
             {props.data.type === "drag" ? <Type_drag data={props.data} /> : null}
             {props.data.type === "mult_press" ? <Type_mult_press data={props.data} /> : null}
 
-
-
         </Grid>
     }
 
@@ -819,7 +705,6 @@ export default function Manager() {
                             >
                                 <KeySettingRender data={data} index={index} />
                             </Paper>
-
                         </Grid>)
                 }
             </Grid>
@@ -836,8 +721,8 @@ export default function Manager() {
         <input id="fileInput" type="file" style={{ display: "none" }} accept="image/*" onChange={handleFileChange} ></input>
         {uploadButton ? <>
             <UploadButton onClick={() => { document.getElementById('fileInput').click(); }} />
-            <UploadButtonJIETU onClick={() => {setUploadButton(false) ; setImgUrl("/screen.png")}} />
-            <UploadButton5s onClick={() => {setUploadButton(false)  ; setTimeout( () => {setImgUrl("/screen.png");} , 5000 ) }} />
+            <UploadButtonJIETU onClick={() => { setUploadButton(false); setImgUrl("/screen.png") }} />
+            <UploadButton5s onClick={() => { setUploadButton(false); setTimeout(() => { setImgUrl("/screen.png"); }, 5000) }} />
         </> : null}
         {imgUrl ? <img id="img" src={imgUrl} style={{ width: "100vw", left: 0, top: 0 }} onClick={handelImgClick}  ></img> : null}
         {imgUrl ? <DraggableContainer><ControlPanel /></DraggableContainer> : null}

@@ -2,3 +2,4 @@ node_modules
 remote_control/build/remote_control/
 go-touch-mapper
 go-touch-mapper_arm64
+go-touch-mapper-gh-pages/build

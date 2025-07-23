@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"embed"
 	"encoding/binary"
 	"fmt"
 	"io/ioutil"
@@ -10,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -422,6 +424,14 @@ func auto_detect_and_read(event_chan chan *event_pack) {
 	}
 }
 
+func fileExists(filename string) bool {
+	_, err := os.Stat(filename)
+	return !os.IsNotExist(err)
+}
+
+//go:embed configs
+var configs embed.FS
+
 func main() {
 	parser := argparse.NewParser("go-touch-mapper", " ")
 
@@ -493,6 +503,31 @@ func main() {
 		logger.WithDebug()
 		logger.Debug("debug on")
 	}
+
+	if *configPath == "" || !fileExists(*configPath) {
+		logger.Warn("未指定配置文件或者文件不存在，使用默认配置文件")
+		exePath, err := os.Executable()
+		if err != nil {
+			fmt.Println("获取可执行文件路径失败:", err)
+			return
+		}
+		exeDir := filepath.Dir(exePath)
+		*configPath = filepath.Join(exeDir, "default.json")
+		if !fileExists(*configPath) {
+			//默认文件也不存在
+			bytes, err := configs.ReadFile("configs/EXAMPLE.JSON")
+			if err != nil {
+				logger.Infof("读取内置配置文件configs/EXAMPLE.JSON错误:%v", err)
+				return
+			} else {
+				// logger.Infof("使用内置配置文件configs/EXAMPLE.JSON:%v", bytes)
+				os.WriteFile(*configPath, bytes, 0644)
+			}
+		}
+	} else {
+
+	}
+	logger.Infof("使用配置文件: %v", *configPath)
 
 	if *create_js_info {
 		auto_detect_result := get_possible_device_indexes(make(map[int]bool))
@@ -602,7 +637,7 @@ func main() {
 			go stdin_control_view_move(touchHandler)
 		}
 
-		go serve() //启动服务器
+		go serve(*configPath, touchHandler.reloadConfigure) //启动服务器
 
 		exitChan := make(chan os.Signal)
 		signal.Notify(exitChan, os.Interrupt, os.Kill, syscall.SIGTERM)

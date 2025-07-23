@@ -11,6 +11,15 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
+   - name: Setup Node.js environment
+      uses: actions/setup-node@v3.8.0
+     
+    - name: install
+      run: cd go-touch-mapper-gh-pages && yarn install
+      
+    - name: build
+      run: cd go-touch-mapper-gh-pages && yarn build || true
+
     - name: Set up Go
       uses: actions/setup-go@v3
       with:
