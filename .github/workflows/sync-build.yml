@@ -1,0 +1,25 @@
+name: sync-build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+  - name: downmload assets amd64
+    run: wget https://github.com/RiderLty/go-touch-mapper/releases/latest/download/go-touch-mapper_amd64 -O go-touch-mapper_amd64
+
+  - name: downmload assets arm64
+    run: wget https://github.com/RiderLty/go-touch-mapper/releases/latest/download/go-touch-mapper_arm64 -O go-touch-mapper_arm64 
+
+  - name: Upload to WebDAV
+    uses: bxb100/action-upload@main
+    with:
+      provider: webdav
+      provider_options: |
+        endpoint=${{ secrets.WEBDAV_ENDPOINT }}
+        username=${{ secrets.WEBDAV_USERNAME }}
+        password=${{ secrets.WEBDAV_PASSWORD }}
+        root=/test/
+      include: |
+        'go-touch-mapper_amd64'
+        'go-touch-mapper_arm64'
