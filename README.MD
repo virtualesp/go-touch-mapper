@@ -12,13 +12,20 @@
 
 androidX86下载 [go-touch-mapper_amd64](https://github.com/RiderLty/go-touch-mapper/releases/latest/download/go-touch-mapper_amd64)
 
+或者使用国内镜像
+
+一般手机平板 [go-touch-mapper_arm64](https://vip.123pan.cn/1833788059/direct/projects/go-touch-mapper/build/go-touch-mapper_arm64)
+
+androidX86 [go-touch-mapper_amd64](https://vip.123pan.cn/1833788059/direct/projects/go-touch-mapper/build/go-touch-mapper_amd64)
+
 读取dev和创建uinput需要shell或者root权限
 
 所以可以用adb shell或者su shell运行
 
 ```
 cd /data/local/tmp
-curl -LJo go-touch-mapper https://github.com/RiderLty/go-touch-mapper/releases/latest/download/go-touch-mapper_arm64
+#curl -LJo go-touch-mapper https://github.com/RiderLty/go-touch-mapper/releases/latest/download/go-touch-mapper_arm64
+curl -LJo go-touch-mapper https://vip.123pan.cn/1833788059/direct/projects/go-touch-mapper/build/go-touch-mapper_arm64
 chmod 777 ./go-touch-mapper
 ./go-touch-mapper -h
 ```

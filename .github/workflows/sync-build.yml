@@ -2,6 +2,10 @@ name: sync-build
 
 on:
   workflow_dispatch:
+  workflow_run:
+    workflows: ["go-build-release"]
+    types:
+      - completed
 jobs:
   build:
     runs-on: ubuntu-latest
