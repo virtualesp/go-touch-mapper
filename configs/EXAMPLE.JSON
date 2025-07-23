@@ -24,6 +24,7 @@
         "RANGE": 0.07,
         "SHIFT_RANGE": 0.099,
         "SHIFT_RANGE_ENABLE": true,
+        "SHIFT_RANGE_SWITCH_ENABLE": true,
         "WASD": [
             "KEY_W",
             "KEY_A",

@@ -94,6 +94,7 @@ export default function ConfigManager() {
             "RANGE": 0.07,
             "SHIFT_RANGE": 0.099,
             "SHIFT_RANGE_ENABLE": true,
+            "SHIFT_RANGE_SWITCH_ENABLE": true,
             "WASD": [
                 "KEY_W",
                 "KEY_A",
@@ -146,7 +147,7 @@ export default function ConfigManager() {
     }
 
     const imgLoaded = () => {
-        setConfig(produce(draft => { draft.SCREEN.SIZE = [document.getElementById("img").naturalWidth,  document.getElementById("img").naturalHeight] }))
+        setConfig(produce(draft => { draft.SCREEN.SIZE = [document.getElementById("img").naturalWidth, document.getElementById("img").naturalHeight] }))
     }
 
 
@@ -328,6 +329,17 @@ export default function ConfigManager() {
                             setConfig(produce(draft => { draft.WHEEL.SHIFT_RANGE_ENABLE = !draft.WHEEL.SHIFT_RANGE_ENABLE; }))
                         }}
                     />
+
+                    <Typography gutterBottom>
+                        {config["WHEEL"]["SHIFT_RANGE_SWITCH_ENABLE"] ? "shift切换模式" : "shift长按模式"}
+                    </Typography>
+                    <Switch
+                        checked={config["WHEEL"]["SHIFT_RANGE_SWITCH_ENABLE"]}
+                        onChange={() => {
+                            setConfig(produce(draft => { draft.WHEEL.SHIFT_RANGE_SWITCH_ENABLE = !draft.WHEEL.SHIFT_RANGE_SWITCH_ENABLE; }))
+                        }}
+                    />
+
                     <Grid container spacing={2}>
                         <Grid item xs>
                             <Slider
