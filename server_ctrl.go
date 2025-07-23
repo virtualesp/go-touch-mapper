@@ -3,8 +3,10 @@ package main
 import (
 	"embed"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/fs"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -24,7 +26,7 @@ func screenHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "image/png")
 }
 
-func serve(mapperFilePath string, reloadConfigureFunc func(mapperFilePath string)) {
+func serve(port int, mapperFilePath string, reloadConfigureFunc func(mapperFilePath string)) {
 	var configMutex sync.RWMutex
 	webFS, err := fs.Sub(staticFS, "go-touch-mapper-gh-pages/build")
 	if err != nil {
@@ -96,6 +98,32 @@ func serve(mapperFilePath string, reloadConfigureFunc func(mapperFilePath string
 		logger.Info("配置文件已更新并重新加载")
 	})
 
-	logger.Info("listen :61070 ...")
-	logger.Fatal(http.ListenAndServe(":61070", nil))
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		panic(err)
+	}
+	logger.Info("可从以下网址访问控制后台:")
+	for _, iface := range interfaces {
+		if iface.Flags&net.FlagUp == 0 {
+			continue
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, addr := range addrs {
+			ipNet, ok := addr.(*net.IPNet)
+			if !ok {
+				continue
+			}
+			ipv4 := ipNet.IP.To4()
+			if ipv4 == nil {
+				continue // 跳过非 IPv4 地址
+			}
+			if !ipv4.IsLoopback() {
+				logger.Infof("http://%s:%v", ipv4, port+1)
+			}
+		}
+	}
+	logger.Fatal(http.ListenAndServe(fmt.Sprintf(":%v", port+1), nil))
 }
