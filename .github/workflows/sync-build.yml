@@ -22,5 +22,5 @@ jobs:
           endpoint=${{ secrets.WEBDAV_ENDPOINT }}
           username=${{ secrets.WEBDAV_USERNAME }}
           password=${{ secrets.WEBDAV_PASSWORD }}
-          root=/projects/go-touch-mapper/build
-        include: './go-touch-mapper*'
+          root=/direct/projects/go-touch-mapper/build
+        include: './go-touch-mapper-a*'
