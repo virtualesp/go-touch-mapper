@@ -96,7 +96,7 @@ func get_abs_map(abs map[evdev.AbsoluteType]evdev.Axis, pack_ch chan *event_pack
 	used[16] = true
 	used[17] = true
 	if !LT_RT_BTN {
-		logger.Info("Pull LT down")
+		logger.Info("按下左扳机")
 		for {
 			code := get_abs_meet_range(abs, pack_ch, 0.99)
 			if !used[code] {
@@ -105,7 +105,7 @@ func get_abs_map(abs map[evdev.AbsoluteType]evdev.Axis, pack_ch chan *event_pack
 				break
 			}
 		}
-		logger.Info("Pull RT down")
+		logger.Info("按下右扳机")
 		for {
 			code := get_abs_meet_range(abs, pack_ch, 0.99)
 			if !used[code] {
@@ -116,7 +116,11 @@ func get_abs_map(abs map[evdev.AbsoluteType]evdev.Axis, pack_ch chan *event_pack
 		}
 	}
 	for _, axis := range []string{"LS", "RS"} {
-		logger.Infof("%s ↓", axis)
+		if axis == "LS" {
+			logger.Info("左摇杆向下拉")
+		} else {
+			logger.Info("右摇杆向下拉")
+		}
 		for {
 			code := get_abs_meet_range(abs, pack_ch, 0.99)
 			if !used[code] {
@@ -125,7 +129,11 @@ func get_abs_map(abs map[evdev.AbsoluteType]evdev.Axis, pack_ch chan *event_pack
 				break
 			}
 		}
-		logger.Infof("%s →", axis)
+		if axis == "LS" {
+			logger.Info("左摇杆向右拉")
+		} else {
+			logger.Info("右摇杆向右拉")
+		}
 		for {
 			code := get_abs_meet_range(abs, pack_ch, 0.99)
 			if !used[code] {
@@ -212,7 +220,7 @@ func create_js_info_file(index int) {
 	}
 
 	for _, key_name := range need_keys {
-		logger.Infof("press %s", key_name)
+		logger.Infof("按下按键 %s", key_name)
 		output.SetPath([]string{"BTN", fmt.Sprintf("%d", get_key(pack_ch))}, key_name)
 	}
 	abs_map := get_abs_map(abs, pack_ch, LT_RT_BTN)
