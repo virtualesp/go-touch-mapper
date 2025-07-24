@@ -144,18 +144,12 @@ PC上 修改remote_control中sender("192.168.1.64:61069")为手机IP，端口默
 ``` 
 python remote_control.py 
 ```
-
 ## [InputManager](https://github.com/RiderLty/inputManager-touch-interface)
 ### 说明
 由Scrcpy修改而来，使用app_process启动
 
 通过 Unix Domain Socket 与主程序通信控制触屏
 
-可在多显示器情况下指定displayID，以控制外接显示器。
+在多显示器情况下使用```-i```指定displayID
 
-只能在adb shell下启用 
-
-且由于Unix Domain Socket的相关权限设定，主程序也必须运行在adb shell下
-
-```
-
+只可在adb shell下使用
