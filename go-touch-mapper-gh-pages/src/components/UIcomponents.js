@@ -66,7 +66,7 @@ const UploadButton5s = ({ onClick }) => {
 const FixedIcon = ({ x, y, size, bgColor, textColor, text }) => {
     return <button
         style={{
-            position: 'fixed',
+            position: 'absolute',
             left: x,
             top: y,
             width: size || 28,
@@ -129,7 +129,7 @@ const WheelShow = ({ x, y, range, shift_range }) => {
     const shift_radius = shift_range *2
     return <div>
         <div style={{
-            position: 'fixed',
+            position: 'absolute',
             left: x,
             top: y,
             width: 16,
@@ -141,7 +141,7 @@ const WheelShow = ({ x, y, range, shift_range }) => {
             pointerEvents: "none",
         }} />
         <div style={{
-            position: 'fixed',
+            position: 'absolute',
             left: x,
             top: y,
             width: radius,
@@ -154,7 +154,7 @@ const WheelShow = ({ x, y, range, shift_range }) => {
         }} />
         {
             shift_range !== 0 && <div style={{
-                position: 'fixed',
+                position: 'absolute',
                 left: x,
                 top: y,
                 width: shift_radius,

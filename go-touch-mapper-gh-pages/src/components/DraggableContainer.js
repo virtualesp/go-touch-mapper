@@ -6,7 +6,7 @@ import Paper from '@mui/material/Paper';
 //标题若兰可拖动 内容外部传入
 
 export default function DraggableContainer(props) { 
-    
+
     const mouseDowning = useRef(false)
     const lastPos = useRef([0, 0])
 

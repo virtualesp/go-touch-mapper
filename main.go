@@ -519,10 +519,12 @@ func main() {
 		if err != nil {
 			logger.Infof("读取内置配置文件configs/EXAMPLE.JSON错误:%v", err)
 			return
-		} else {
-			logger.Infof("已从模板创建配置文件:%v", *configPath)
-			os.WriteFile(*configPath, bytes, 0644)
 		}
+
+		logger.Infof("已从模板创建配置文件:%v", *configPath)
+
+		os.WriteFile(*configPath, bytes, 0644)
+
 	}
 
 	logger.Infof("使用配置文件: %v", *configPath)

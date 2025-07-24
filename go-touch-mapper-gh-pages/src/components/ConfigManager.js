@@ -20,7 +20,7 @@ import {
     WheelShow,
 } from "./UIcomponents"
 import { produce } from "immer"
-
+import FullscreenIcon from '@mui/icons-material/Fullscreen';
 
 function copyToClipboard(text) {
     let transfer = document.createElement('input');
@@ -127,8 +127,7 @@ export default function ConfigManager() {
     const getDisplayValueY = useCallback((value) => { return parseInt(value * config["SCREEN"]["SIZE"][1]) }, [config["SCREEN"]["SIZE"]])
     const getPostionValueX = useCallback((value) => { return parseInt(value * imgSize[0]) }, [imgSize])
     const getPostionValueY = useCallback((value) => { return parseInt(value * imgSize[1]) }, [imgSize])
-
-
+    // memos
 
     const handleFileChange = (e) => {
         setUploadButton(false);
@@ -153,9 +152,10 @@ export default function ConfigManager() {
 
 
     const handelImgClick = (e) => {
+        const rect = document.getElementById("img").getBoundingClientRect()
         const key = downingKey.current === null ? downingBtn.current : downingKey.current;//优先响应手柄按键
-        const x = e.clientX / document.getElementById("img").width;
-        const y = e.clientY / document.getElementById("img").height
+        const x = (e.clientX - rect.left) / document.getElementById("img").width;
+        const y = (e.clientY - rect.top) / document.getElementById("img").height
         if (x > 1 || y > 1) {//忽略大于屏幕的
             return
         }
@@ -205,13 +205,11 @@ export default function ConfigManager() {
             }, 1000)
         })
     }
-    const OtherSettings = ({ config, setConfig }) => {
+    const OtherSettings = () => {
 
         const wheelPosSelecting = useRef(false)
         const [range, setRange] = useState(config["WHEEL"]["RANGE"] * 100)
         const [shiftRange, setShiftRange] = useState(config["WHEEL"]["SHIFT_RANGE"] * 100)
-
-
 
         const [setPosButtonDisabled, setSetPosButtonDisabled] = useState(false)
         const readyToSetPos = () => {
@@ -227,6 +225,7 @@ export default function ConfigManager() {
         }
 
         useEffect(() => {
+
             window.addEventListener('imgOnNoKeyClick', imgClickListener)
             return () => {
                 window.removeEventListener('imgOnNoKeyClick', imgClickListener)
@@ -237,7 +236,20 @@ export default function ConfigManager() {
             width: "370px",
             marginLeft: "10px",
         }}>
-            {nowSettingKey ? <a>当前按下{nowSettingKey}，点击屏幕设置映射</a> : "按下某个按键并点击"}
+            <Grid
+                container
+                direction="row"
+                justifyContent="space-between"
+                alignItems="center"
+            >
+                <Grid item>
+                    {nowSettingKey ? <a>&emsp;当前按下{nowSettingKey}，点击屏幕设置映射</a> : <a>&emsp;按下某个按键并点击</a>}
+                </Grid>
+                <Grid item>
+                    <IconButton onClick={() => document.body.requestFullscreen()} ><FullscreenIcon /></IconButton>
+                </Grid>
+            </Grid>
+
             <Grid
                 container
                 spacing={"10px"}
@@ -305,7 +317,7 @@ export default function ConfigManager() {
                         <Grid item xs>
                             <Slider
                                 min={0}
-                                max={100}
+                                max={50}
                                 step={1}
                                 value={range}
                                 onChange={(_, value) => { setRange(value) }}
@@ -344,7 +356,7 @@ export default function ConfigManager() {
                         <Grid item xs>
                             <Slider
                                 min={range}
-                                max={100}
+                                max={50}
                                 step={1}
                                 value={shiftRange}
                                 onChange={(_, value) => { setShiftRange(value) }}
@@ -582,47 +594,9 @@ export default function ConfigManager() {
 
 
     const ControlPanel = () => {
-        return <div
-            style={{
-                maxHeight: "80vh",
-                overflowY: "scroll",
-            }}
-        >
-            <Grid
-                container
-                direction="column"
-                justifyContent="flex-start"
-                alignItems="flex-start"
-                spacing={"10px"}
-                sx={{
-                    width: "400px",
-                    backgroundColor: "#F5F5F5",
-                    paddingBottom: "10px",
-                    spacing: "0px",
-                    paddingTop: "10px",
-                }}
-            >
-                <Grid item xs={12}>
-                    <OtherSettings config={config} setConfig={setConfig} />
-                </Grid>           {
-                    Object.keys(config["KEY_MAPS"]).map((keycode, index) =>
-                        <Grid
-                            item
-                            xs={12}
-                            key={keycode}
-                        >
-                            <Paper
-                                sx={{
-                                    width: "370px",
-                                    marginLeft: "10px",
-                                }}
-                            >
-                                <KeySettingRender data={{ ...config["KEY_MAPS"][keycode], "KEY": keycode }} />
-                            </Paper>
-                        </Grid>)
-                }
-            </Grid>
-        </div>
+
+
+        return
     }
 
 
@@ -698,12 +672,53 @@ export default function ConfigManager() {
             <UploadButton5s onClick={() => { setUploadButton(false); setTimeout(() => { getRemoteApiImg("/screen.png"); }, 5000) }} />
         </> : null}
         {imgUrl ? <img id="img" src={imgUrl} style={{ width: "100vw", left: 0, top: 0 }} onClick={handelImgClick} onLoad={imgLoaded} ></img> : null}
-        {imgUrl ? <DraggableContainer><ControlPanel /></DraggableContainer> : null}
+        {imgUrl ? <DraggableContainer>
+            <div
+                style={{
+                    maxHeight: "80vh",
+                    overflowY: "scroll",
+                }}
+            >
+                <Grid
+                    container
+                    direction="column"
+                    justifyContent="flex-start"
+                    alignItems="flex-start"
+                    spacing={"10px"}
+                    sx={{
+                        width: "400px",
+                        backgroundColor: "#F5F5F5",
+                        paddingBottom: "10px",
+                        spacing: "0px",
+                        paddingTop: "10px",
+                    }}
+                >
+                    <Grid item xs={12}>
+                        <OtherSettings />
+                    </Grid>
+                    {
+                        Object.keys(config["KEY_MAPS"]).map((keycode, index) =>
+                            <Grid
+                                item
+                                xs={12}
+                                key={keycode}
+                            >
+                                <Paper
+                                    sx={{
+                                        width: "370px",
+                                        marginLeft: "10px",
+                                    }}
+                                >
+                                    <KeySettingRender data={{ ...config["KEY_MAPS"][keycode], "KEY": keycode }} />
+                                </Paper>
+                            </Grid>)
+                    }
+                </Grid>
+            </div>
+        </DraggableContainer> : null}
 
         {
-            Object.keys(config["KEY_MAPS"]).map((keycode, index) => {
-                return <KeyShow key={index} data={{ ...config["KEY_MAPS"][keycode], "KEY": keycode }} />
-            })
+            Object.keys(config["KEY_MAPS"]).map((keycode, index) => <KeyShow key={keycode} data={{ ...config["KEY_MAPS"][keycode], "KEY": keycode }} />)
         }
         {
             imgUrl ? <WheelShow
