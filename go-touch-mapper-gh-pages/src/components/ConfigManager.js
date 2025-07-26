@@ -484,7 +484,7 @@ export default function ConfigManager() {
                             sx={{
                                 width: "100%",
                             }}
-                        >{"右键键"}</Button>
+                        >{"右键"}</Button>
                     </Grid>
                     <Grid item xs={3}>
                         <Button
