@@ -1,9 +1,15 @@
 package main
 
 import (
+	"bytes"
 	"embed"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/color"
+	"image/draw"
+	"image/jpeg"
+	"image/png"
 	"io"
 	"io/fs"
 	"net"
@@ -16,14 +22,50 @@ import (
 //go:embed go-touch-mapper-gh-pages/build
 var staticFS embed.FS
 
-func screenHandler(w http.ResponseWriter, r *http.Request) {
-	cmd := exec.Command("screencap", "-p")
-	cmd.Stdout = w
-	if err := cmd.Run(); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+func convertPNGtoJPEG(pngBytes []byte, quality int) ([]byte, error) {
+	// 解码 PNG
+	srcImg, err := png.Decode(bytes.NewReader(pngBytes))
+	if err != nil {
+		return nil, err
 	}
-	w.Header().Set("Content-Type", "image/png")
+
+	// 创建白色背景画布
+	bg := image.NewRGBA(srcImg.Bounds())
+	draw.Draw(bg, bg.Bounds(), &image.Uniform{color.White}, image.Point{}, draw.Src)
+
+	// 将原图绘制到白色背景上
+	draw.Draw(bg, bg.Bounds(), srcImg, srcImg.Bounds().Min, draw.Over)
+
+	// 编码为 JPEG
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, bg, &jpeg.Options{Quality: quality}); err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
+}
+
+func screenHandler(w http.ResponseWriter, r *http.Request) {
+	// cmd := exec.Command("screencap", "-p")
+	// cmd.Stdout = w
+	// if err := cmd.Run(); err != nil {
+	// 	http.Error(w, err.Error(), http.StatusInternalServerError)
+	// 	return
+	// }
+	// w.Header().Set("Content-Type", "image/png")
+	// start := time.Now()
+	cmd := exec.Command("screencap", "-p")
+	pngBytes, _ := cmd.Output()
+	// end := time.Since(start)
+	// logger.Infof("cmd use %v", end)
+	// start = time.Now()
+	jpegData, _ := convertPNGtoJPEG(pngBytes, 80)
+	w.Header().Set("Content-Type", "image/jpeg")
+	if _, err := w.Write(jpegData); err != nil {
+		http.Error(w, "Failed to write image", http.StatusInternalServerError)
+	}
+	// end = time.Since(start)
+	// logger.Infof("send use %v", end)
 }
 
 func serve(port int, mapperFilePath string, reloadConfigureFunc func(mapperFilePath string)) {
