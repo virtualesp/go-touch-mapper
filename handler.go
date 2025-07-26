@@ -538,8 +538,14 @@ func (self *TouchHandler) handel_rel_event(x int32, y int32, HWhell int32, Wheel
 }
 
 func (self *TouchHandler) execute_key_action(start time.Time, key_name string, up_down int32, action *simplejson.Json, state interface{}) {
+	action_type := action.Get("TYPE").MustString()
+	if key_name == "REL_WHEEL_DOWN" || key_name == "REL_WHEEL_UP" {
+		if action_type == "PRESS" || action_type == "AUTO_FIRE" || action_type == "MULT_PRESS" {
+			logger.Errorf("鼠标滚轮无法使用动作类型:%v", action_type)
+		}
+	}
 	defer logger.Debugf("key[%s]%s\t%v\t%v", key_name, UDF[up_down], action, time.Since(start))
-	switch action.Get("TYPE").MustString() {
+	switch action_type {
 	case "PRESS": //按键的按下与释放直接映射为触屏的按下与释放
 		if up_down == DOWN {
 			x := int32(action.Get("POS").GetIndex(0).MustFloat64()*float64(self.rel_screen_x)) + rand_offset()

@@ -122,8 +122,8 @@ export default function ConfigManager() {
                 0.5
             ],
             "SPEED": [
-                1,
-                1
+                0.3,
+                0.3
             ]
         },
         "WHEEL": {
@@ -239,10 +239,7 @@ export default function ConfigManager() {
     })
 
     const [exportButtonText, setExportButtonText] = useState("更新配置")
-    const downingBtn = useRef(null);//手柄按下到的按钮
-    const downingKey = useRef(null);//键盘按下
-    const downingStack = useRef([]);//按下按键栈
-    const [nowSettingKey, setNowSettingKey] = useState(null);//用于指示现在按下的按键
+    const [selectKEY, setSelectKEY] = useState(null)
 
     // const [uploadButton, setUploadButton] = useState(true);
     const [imgUrl, setImgUrl] = useState(config["IMG"]);
@@ -282,24 +279,38 @@ export default function ConfigManager() {
 
     const handelImgClick = (e) => {
         const rect = document.getElementById("img").getBoundingClientRect()
-        const key = downingKey.current === null ? downingBtn.current : downingKey.current;//优先响应手柄按键
+        const key = selectKEY
         const x = (e.clientX - rect.left) / document.getElementById("img").width;
         const y = (e.clientY - rect.top) / document.getElementById("img").height
         if (x > 1 || y > 1) {//忽略大于屏幕的
             return
         }
         if (key !== null) {
-            setConfig(produce(draft => {
-                draft.KEY_MAPS[key] = {
-                    "TYPE": "PRESS",
-                    "POS": [
-                        x,
-                        y
-                    ]
-                }
-            }))
-
-
+            if (key === "REL_WHEEL_UP" || key == "REL_WHEEL_DOWN") {
+                setConfig(produce(draft => {
+                    draft.KEY_MAPS[key] = {
+                        "TYPE": "CLICK",
+                        "POS": [
+                            x,
+                            y
+                        ],
+                        "INTERVAL": [18]
+                    }
+                }))
+            } else {
+                setConfig(produce(draft => {
+                    draft.KEY_MAPS[key] = {
+                        "TYPE": "PRESS",
+                        "POS": [
+                            x,
+                            y
+                        ]
+                    }
+                }))
+            }
+            if (["BTN_LEFT", "BTN_MIDDLE", "BTN_RIGHT", "BTN_SIDE", "BTN_EXTRA", "REL_WHEEL_DOWN", "REL_WHEEL_UP"].indexOf(key) !== -1) {
+                 setSelectKEY(null)
+            }
         } else {
             if (window.dispatchEvent) {
                 window.dispatchEvent(new CustomEvent('imgOnNoKeyClick', {
@@ -372,7 +383,7 @@ export default function ConfigManager() {
                 alignItems="center"
             >
                 <Grid item>
-                    {nowSettingKey ? <a>&emsp;当前按下{nowSettingKey}，点击屏幕设置映射</a> : <a>&emsp;按下某个按键并点击</a>}
+                    {selectKEY ? <a>&emsp;点击屏幕映射{selectKEY}</a> : <a>&emsp;按下某个按键并点击</a>}
                 </Grid>
                 <Grid item>
                     <IconButton onClick={() => document.body.requestFullscreen()} ><FullscreenIcon /></IconButton>
@@ -400,7 +411,7 @@ export default function ConfigManager() {
                 >
                     <Grid item xs={6}>
                         <Button
-                            onClick={() => {getRemoteApiImg("/screen.png")} }
+                            onClick={() => { getRemoteApiImg("/screen.png") }}
                             variant="outlined"
                             sx={{
                                 width: "100%",
@@ -410,7 +421,7 @@ export default function ConfigManager() {
                     </Grid>
                     <Grid item xs={6}>
                         <Button
-                            onClick={() => {setTimeout(() => {getRemoteApiImg("/screen.png")} , 5000)} }
+                            onClick={() => { setTimeout(() => { getRemoteApiImg("/screen.png") }, 5000) }}
                             variant="outlined"
                             sx={{
                                 width: "100%",
@@ -428,6 +439,94 @@ export default function ConfigManager() {
                         marginTop: "10px",
                     }}
                 >{exportButtonText}</Button>
+
+
+                <Grid
+                    container
+                    direction="row"
+                    justifyContent="space-evenly"
+                    alignItems="center"
+                    spacing={"10px"}
+                >
+                    <Grid item xs={12}>
+
+                        <Typography
+                            sx={{
+                                width: "100%",
+                                marginTop: "10px",
+                            }}
+                        >
+                            鼠标按键
+                        </Typography>
+                    </Grid>
+                    <Grid item xs={4}>
+                        <Button
+                            onClick={() => { setSelectKEY("BTN_LEFT") }}
+                            variant="outlined"
+                            sx={{
+                                width: "100%",
+                            }}
+                        >{"左键"}</Button>
+                    </Grid>
+                    <Grid item xs={4}>
+                        <Button
+                            onClick={() => { setSelectKEY("BTN_MIDDLE") }}
+                            variant="outlined"
+                            sx={{
+                                width: "100%",
+                            }}
+                        >{"中键"}</Button>
+                    </Grid>
+                    <Grid item xs={4}>
+                        <Button
+                            onClick={() => { setSelectKEY("BTN_RIGHT") }}
+                            variant="outlined"
+                            sx={{
+                                width: "100%",
+                            }}
+                        >{"右键键"}</Button>
+                    </Grid>
+                    <Grid item xs={3}>
+                        <Button
+                            onClick={() => { setSelectKEY("BTN_EXTRA") }}
+                            variant="outlined"
+                            sx={{
+                                width: "100%",
+                            }}
+                        >{"前进"}</Button>
+                    </Grid>
+                    <Grid item xs={3}>
+                        <Button
+                            onClick={() => { setSelectKEY("BTN_SIDE") }}
+                            variant="outlined"
+                            sx={{
+                                width: "100%",
+                            }}
+                        >{"后退"}</Button>
+                    </Grid>
+                    <Grid item xs={3}>
+                        <Button
+                            onClick={() => { setSelectKEY("REL_WHEEL_UP") }}
+                            variant="outlined"
+                            sx={{
+                                width: "100%",
+                            }}
+                        >{"滚轮上"}</Button>
+                    </Grid>
+                    <Grid item xs={3}>
+                        <Button
+                            onClick={() => { setSelectKEY("REL_WHEEL_DOWN") }}
+                            variant="outlined"
+                            sx={{
+                                width: "100%",
+                            }}
+                        >{"滚轮下"}</Button>
+                    </Grid>
+
+
+
+                </Grid>
+
                 <Grid
                     container
                     direction="row"
@@ -437,7 +536,7 @@ export default function ConfigManager() {
                         height: "50px",
                     }}
                 >
-                    <a>灵敏度&emsp;&emsp;横向 : </a>
+                    <a>视角灵敏度&emsp;&emsp;横向 : </a>
                     <CostumedInput defaultValue={config["MOUSE"]["SPEED"][0]} onCommit={(value) => {
                         setConfig(produce(draft => { draft.MOUSE.SPEED[0] = value; }))
                     }} width="40px" />
@@ -661,6 +760,8 @@ export default function ConfigManager() {
 
 
     const KeySettingRender = ({ data }) => {
+        const isWheel = data["KEY"] === "REL_WHEEL_UP" || data["KEY"] === "REL_WHEEL_DOWN"
+
 
         const handleChange = (e) => {
             if (e.target.value === "CLICK") {
@@ -723,11 +824,11 @@ export default function ConfigManager() {
                             onChange={handleChange}
                             sx={{ height: "30px", }}
                         >
-                            <MenuItem value={"PRESS"}>同步按下释放</MenuItem>
+                            {!isWheel && <MenuItem value={"PRESS"}>同步按下释放</MenuItem>}
                             <MenuItem value={"CLICK"}>单次点击</MenuItem>
-                            <MenuItem value={"AUTO_FIRE"}>连发</MenuItem>
+                            {!isWheel && <MenuItem value={"AUTO_FIRE"}>连发</MenuItem>}
                             <MenuItem value={"DRAG"}>滑动</MenuItem>
-                            <MenuItem value={"MULT_PRESS"}>多点触摸</MenuItem>
+                            {!isWheel && <MenuItem value={"MULT_PRESS"}>多点触摸</MenuItem>}
                         </Select>
                     </FormControl>
                 </Grid>
@@ -752,23 +853,13 @@ export default function ConfigManager() {
         document.onkeydown = (e) => {
             if (e.repeat === false && window.stopPreventDefault !== true) {
                 e.preventDefault();
-                // downingStack.current.push(e.code)
-                // downingKey.current = downingStack.current[downingStack.current.length - 1];
-                // setNowSettingKey(downingStack.current[downingStack.current.length - 1])
-                downingKey.current = keyNameMap[e.code.toLowerCase()]
-                setNowSettingKey(keyNameMap[e.code.toLowerCase()])
+                setSelectKEY(keyNameMap[e.code.toLowerCase()])
             }
         }
         document.onkeyup = (e) => {
             if (window.stopPreventDefault !== true) {
                 e.preventDefault();
-                downingKey.current = null
-                setNowSettingKey(null)
-                // downingStack.current = [...downingStack.current].filter(key => key !== e.code)
-                // if (downingStack.current.length === 0) {
-                //     downingKey.current = null
-                //     setNowSettingKey(null)
-                // }
+                setSelectKEY(null)
             }
         }
         document.oncontextmenu = function (e) {
@@ -808,19 +899,9 @@ export default function ConfigManager() {
     }}>
         <div>{JSON.stringify()}</div>
         <JoystickListener setDowningBtn={(value) => {
-            downingBtn.current = value;
-            if (value === null) {
-                setNowSettingKey(downingKey.current)
-            } else {
-                setNowSettingKey(value)
-            }
+            setSelectKEY(value)
         }} />
         <input id="fileInput" type="file" style={{ display: "none" }} accept="image/*" onChange={handleFileChange} ></input>
-        {/* {uploadButton ? <>
-            <UploadButton onClick={() => { document.getElementById('fileInput').click(); }} />
-            <UploadButtonJIETU onClick={() => { setUploadButton(false); getRemoteApiImg("/screen.png") }} />
-            <UploadButton5s onClick={() => { setUploadButton(false); setTimeout(() => { getRemoteApiImg("/screen.png"); }, 5000) }} />
-        </> : null} */}
         <img id="img" src={config["IMG"]} style={{ width: "100vw", left: 0, top: 0 }} onClick={handelImgClick} onLoad={imgLoaded} ></img>
         <DraggableContainer>
             <div
