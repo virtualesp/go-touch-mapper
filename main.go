@@ -590,19 +590,19 @@ func main() {
 
 		go handel_u_input_mouse_keyboard(fileted_u_input_control_ch)
 
-		var couch_control_func touch_control_func
+		var touch_control_func touch_control_func
 		if *usingInputManagerID != -1 {
 			logger.Info("触屏控制将使用inputManager处理")
-			couch_control_func = handel_touch_using_input_manager(*usingInputManagerID)
+			touch_control_func = handel_touch_using_input_manager(*usingInputManagerID)
 		} else {
-			couch_control_func = handel_touch_using_vTouch()
+			touch_control_func = handel_touch_using_vTouch()
 		}
 
 		map_switch_signal := make(chan bool) //通知虚拟鼠标当前为鼠标还是映射模式
 		touchHandler := InitTouchHandler(
 			*configPath,
 			events_ch,
-			couch_control_func,
+			touch_control_func,
 			u_input_control_ch,
 			*usingInputManagerID == -1,
 			map_switch_signal,

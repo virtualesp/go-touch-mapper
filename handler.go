@@ -498,6 +498,12 @@ func (self *TouchHandler) loop_handel_wasd_wheel() { //循环处理wasd映射轮
 	}
 }
 
+func (self *TouchHandler) quick_click(keyname string) {
+	self.handel_key_up_down(keyname, DOWN, "MOUSE_WHEEL")
+	time.Sleep(time.Duration(50) * time.Millisecond)
+	self.handel_key_up_down(keyname, UP, "MOUSE_WHEEL")
+}
+
 func (self *TouchHandler) handel_rel_event(x int32, y int32, HWhell int32, Wheel int32) {
 	if x != 0 || y != 0 {
 		if self.map_on {
@@ -507,18 +513,12 @@ func (self *TouchHandler) handel_rel_event(x int32, y int32, HWhell int32, Wheel
 		}
 	}
 
-	quick_click := func(keyname string) {
-		self.handel_key_up_down(keyname, DOWN, "MOUSE_WHEEL")
-		time.Sleep(time.Duration(50) * time.Millisecond)
-		self.handel_key_up_down(keyname, UP, "MOUSE_WHEEL")
-	}
-
 	if HWhell != 0 {
 		if self.map_on {
 			if HWhell > 0 {
-				go quick_click("REL_HWHEEL_UP")
+				go self.quick_click("REL_HWHEEL_UP")
 			} else if HWhell < 0 {
-				go quick_click("REL_HWHEEL_DOWN")
+				go self.quick_click("REL_HWHEEL_DOWN")
 			}
 		} else {
 			self.u_input_control(UInput_mouse_wheel, REL_HWHEEL, HWhell)
@@ -527,9 +527,9 @@ func (self *TouchHandler) handel_rel_event(x int32, y int32, HWhell int32, Wheel
 	if Wheel != 0 {
 		if self.map_on {
 			if Wheel > 0 {
-				go quick_click("REL_WHEEL_UP") //纵向滚轮向上
+				go self.quick_click("REL_WHEEL_UP") //纵向滚轮向上
 			} else if Wheel < 0 {
-				go quick_click("REL_WHEEL_DOWN") //纵向滚轮向下
+				go self.quick_click("REL_WHEEL_DOWN") //纵向滚轮向下
 			}
 		} else {
 			self.u_input_control(UInput_mouse_wheel, REL_WHEEL, Wheel)
@@ -539,9 +539,9 @@ func (self *TouchHandler) handel_rel_event(x int32, y int32, HWhell int32, Wheel
 
 func (self *TouchHandler) execute_key_action(start time.Time, key_name string, up_down int32, action *simplejson.Json, state interface{}) {
 	action_type := action.Get("TYPE").MustString()
-	if key_name == "REL_WHEEL_DOWN" || key_name == "REL_WHEEL_UP" {
+	if key_name == "REL_WHEEL_DOWN" || key_name == "REL_WHEEL_UP" || key_name == "REL_HWHEEL_DOWN" || key_name == "REL_HWHEEL_UP" {
 		if action_type == "PRESS" || action_type == "AUTO_FIRE" || action_type == "MULT_PRESS" {
-			logger.Errorf("鼠标滚轮无法使用动作类型:%v", action_type)
+			logger.Errorf("鼠标滚轮无法使用动作类型:%v", action_type) //二次保证
 		}
 	}
 	defer logger.Debugf("key[%s]%s\t%v\t%v", key_name, UDF[up_down], action, time.Since(start))
@@ -558,15 +558,13 @@ func (self *TouchHandler) execute_key_action(start time.Time, key_name string, u
 		}
 	case "CLICK": //仅在按下的时候执行一次 不保存状态所以不响应down 也不会有down到这里
 		if up_down == DOWN {
-			x := int32(action.Get("POS").GetIndex(0).MustFloat64()*float64(self.rel_screen_x)) + rand_offset()
-			y := int32(action.Get("POS").GetIndex(1).MustFloat64()*float64(self.rel_screen_y)) + rand_offset()
-			// tid := self.require_id()
-			// self.touch_control(TouchActionRequire, tid, x, y)
-			tid := self.touch_require(x, y, touch_pos_scale)
-			time.Sleep(time.Duration(8) * time.Millisecond) //8ms 120HZ下一次
-			// self.touch_control(TouchActionRelease, tid, -1, -1)
-			// self.allocated_id[tid] = false
-			self.touch_release(tid)
+			go (func() {
+				x := int32(action.Get("POS").GetIndex(0).MustFloat64()*float64(self.rel_screen_x)) + rand_offset()
+				y := int32(action.Get("POS").GetIndex(1).MustFloat64()*float64(self.rel_screen_y)) + rand_offset()
+				tid := self.touch_require(x, y, touch_pos_scale)
+				time.Sleep(time.Duration(8) * time.Millisecond) //8ms 120HZ下一次
+				self.touch_release(tid)
+			})()
 		}
 
 	case "AUTO_FIRE": //连发 按下开始 松开结束 按照设置的间隔 持续点击
@@ -576,17 +574,19 @@ func (self *TouchHandler) execute_key_action(start time.Time, key_name string, u
 			down_time := action.Get("INTERVAL").GetIndex(0).MustInt()
 			interval_time := action.Get("INTERVAL").GetIndex(1).MustInt()
 			self.key_action_state_save.Store(key_name, true)
-			for {
-				if running, _ := self.key_action_state_save.Load(key_name); running == true {
+			go (func() {
+				for {
 					tid := self.touch_require(x+rand_offset(), y+rand_offset(), touch_pos_scale)
 					time.Sleep(time.Duration(down_time) * time.Millisecond)
 					self.touch_release(tid)
 					time.Sleep(time.Duration(interval_time) * time.Millisecond)
-				} else {
-					break
+					if running, ok := self.key_action_state_save.Load(key_name); !ok || running == false {
+						break
+					}
 				}
-			}
-			self.key_action_state_save.Delete(key_name)
+				self.key_action_state_save.Delete(key_name)
+			})()
+
 		} else if up_down == UP {
 			self.key_action_state_save.Store(key_name, false)
 		}
@@ -596,19 +596,21 @@ func (self *TouchHandler) execute_key_action(start time.Time, key_name string, u
 			tid_save := make([]int32, 0)
 			release_signal := make(chan bool, 16)
 			self.key_action_state_save.Store(key_name, release_signal)
-			for i := range action.Get("POS_S").MustArray() {
-				x := int32(action.Get("POS_S").GetIndex(i).GetIndex(0).MustFloat64()*float64(self.rel_screen_x)) + rand_offset()
-				y := int32(action.Get("POS_S").GetIndex(i).GetIndex(1).MustFloat64()*float64(self.rel_screen_y)) + rand_offset()
-				tid := self.touch_require(x, y, touch_pos_scale)
-				tid_save = append(tid_save, tid)
-				time.Sleep(time.Duration(8) * time.Millisecond) // 间隔8ms 是否需要延迟有待验证
-			}
-			<-release_signal
-			self.key_action_state_save.Delete(key_name)
-			for i := len(tid_save) - 1; i >= 0; i-- {
-				self.touch_release(tid_save[i])
-				time.Sleep(time.Duration(8) * time.Millisecond)
-			}
+			go (func() {
+				for i := range action.Get("POS_S").MustArray() {
+					x := int32(action.Get("POS_S").GetIndex(i).GetIndex(0).MustFloat64()*float64(self.rel_screen_x)) + rand_offset()
+					y := int32(action.Get("POS_S").GetIndex(i).GetIndex(1).MustFloat64()*float64(self.rel_screen_y)) + rand_offset()
+					tid := self.touch_require(x, y, touch_pos_scale)
+					tid_save = append(tid_save, tid)
+					time.Sleep(time.Duration(8) * time.Millisecond) // 间隔8ms 是否需要延迟有待验证
+				}
+				<-release_signal
+				self.key_action_state_save.Delete(key_name)
+				for i := len(tid_save) - 1; i >= 0; i-- {
+					self.touch_release(tid_save[i])
+					time.Sleep(time.Duration(8) * time.Millisecond)
+				}
+			})()
 		} else if up_down == UP {
 			state.(chan bool) <- true
 			//按下立即创建channel 并保存状态
@@ -619,22 +621,24 @@ func (self *TouchHandler) execute_key_action(start time.Time, key_name string, u
 		}
 	case "DRAG": //只响应一次按下  可同时多次触发
 		if up_down == DOWN {
-			pos_len := len(action.Get("POS_S").MustArray())
-			interval_time := action.Get("INTERVAL").GetIndex(0).MustInt()
-			init_x := int32(action.Get("POS_S").GetIndex(0).GetIndex(0).MustFloat64() * float64(self.rel_screen_x))
-			init_y := int32(action.Get("POS_S").GetIndex(0).GetIndex(1).MustFloat64() * float64(self.rel_screen_y))
-			tid := self.touch_require(init_x, init_y, touch_pos_scale)
-			time.Sleep(time.Duration(interval_time) * time.Millisecond)
-			for index := 1; index < pos_len-1; index++ {
-				x := int32(action.Get("POS_S").GetIndex(index).GetIndex(0).MustFloat64()*float64(self.rel_screen_x)) + rand_offset()
-				y := int32(action.Get("POS_S").GetIndex(index).GetIndex(1).MustFloat64()*float64(self.rel_screen_y)) + rand_offset()
-				self.touch_move(tid, x, y, touch_pos_scale)
+			go (func() {
+				pos_len := len(action.Get("POS_S").MustArray())
+				interval_time := action.Get("INTERVAL").GetIndex(0).MustInt()
+				init_x := int32(action.Get("POS_S").GetIndex(0).GetIndex(0).MustFloat64() * float64(self.rel_screen_x))
+				init_y := int32(action.Get("POS_S").GetIndex(0).GetIndex(1).MustFloat64() * float64(self.rel_screen_y))
+				tid := self.touch_require(init_x, init_y, touch_pos_scale)
 				time.Sleep(time.Duration(interval_time) * time.Millisecond)
-			}
-			end_x := int32(action.Get("POS_S").GetIndex(pos_len-1).GetIndex(0).MustFloat64() * float64(self.rel_screen_x))
-			end_y := int32(action.Get("POS_S").GetIndex(pos_len-1).GetIndex(1).MustFloat64() * float64(self.rel_screen_y))
-			self.touch_move(tid, end_x, end_y, touch_pos_scale)
-			self.touch_release(tid)
+				for index := 1; index < pos_len-1; index++ {
+					x := int32(action.Get("POS_S").GetIndex(index).GetIndex(0).MustFloat64()*float64(self.rel_screen_x)) + rand_offset()
+					y := int32(action.Get("POS_S").GetIndex(index).GetIndex(1).MustFloat64()*float64(self.rel_screen_y)) + rand_offset()
+					self.touch_move(tid, x, y, touch_pos_scale)
+					time.Sleep(time.Duration(interval_time) * time.Millisecond)
+				}
+				end_x := int32(action.Get("POS_S").GetIndex(pos_len-1).GetIndex(0).MustFloat64() * float64(self.rel_screen_x))
+				end_y := int32(action.Get("POS_S").GetIndex(pos_len-1).GetIndex(1).MustFloat64() * float64(self.rel_screen_y))
+				self.touch_move(tid, end_x, end_y, touch_pos_scale)
+				self.touch_release(tid)
+			})()
 		} else if up_down == UP {
 
 		}
@@ -733,7 +737,7 @@ func (self *TouchHandler) handel_key_up_down(key_name string, up_down int32, dev
 			if (up_down == UP && !ok) || (up_down == DOWN && ok) {
 			} else {
 				// logger.Debugf("key[%s]%s\t%v\t%v", key_name, UDF[up_down], action, state)
-				go self.execute_key_action(time.Now(), key_name, up_down, action, state)
+				self.execute_key_action(time.Now(), key_name, up_down, action, state)
 			}
 		} else {
 			logger.Debugf("key[%s]\t无触屏映射", key_name)
