@@ -20,12 +20,21 @@ btn_small.setPosition(-500, -500)
 const devWitdh = device.width;
 const devHeight = device.height;
 
+
+const rotationMap = [
+    [0, 1],
+    [1, 0],
+    [0, 0],
+    [0, 0],
+]
+
 try {
     toast("虚拟光标已启动");
     udpSocket = new java.net.DatagramSocket(6533)
     bytes = java.lang.reflect.Array.newInstance(java.lang.Byte.TYPE, 1024)
     dataGramPack = new java.net.DatagramPacket(bytes, 1024)
     var runningFlag = true
+    let last = 0;
     while (runningFlag) {
         udpSocket.receive(dataGramPack);
         data = dataGramPack.getData();
@@ -39,15 +48,23 @@ try {
             y = parseInt(xysd[1]);
             s = parseInt(xysd[2]);
             d = parseInt(xysd[3]);
+            o = parseInt(xysd[4])
             if (s === 0) {//show === false 全隐藏
                 btn_big.setPosition(-500, -500);
                 btn_small.setPosition(-500, -500);
             } else {
+                const [offsetX, offsetY] = rotationMap[o]
+                if (last !== o) {
+                    // toast("rotation => "+o)
+                    toast("offsetX,offsetY" + offsetX + "," + offsetY)
+                    last = o
+                }
+                const statusBarHeight = context.getResources().getDimensionPixelSize(context.getResources().getIdentifier('status_bar_height', 'dimen', 'android'));
                 if (d === 0) {
-                    btn_big.setPosition(x - 62, y - 62);
+                    btn_big.setPosition(x - offsetX * statusBarHeight - btn_big.width / 2, y - offsetY * statusBarHeight - btn_big.height / 2);
                     btn_small.setPosition(-500, -500);
                 } else {
-                    btn_small.setPosition(x - 46, y - 46);
+                    btn_small.setPosition(x - offsetX * statusBarHeight - btn_small.width / 2, y - offsetY * statusBarHeight - btn_small.height / 2);
                     btn_big.setPosition(-500, -500);
                 }
             }

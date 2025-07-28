@@ -115,7 +115,7 @@ func (self *v_mouse_controller) display_mouse_control(show, downing bool, abs_x,
 	} else {
 		downing_int = 0
 	}
-	fmt_str := fmt.Sprintf("%d,%d,%d,%d", abs_x, abs_y, show_int, downing_int)
+	fmt_str := fmt.Sprintf("%d,%d,%d,%d,%d", abs_x, abs_y, show_int, downing_int, global_device_orientation)
 	self.udp_write_ch <- []byte(fmt_str)
 }
 
@@ -148,8 +148,12 @@ func (self *v_mouse_controller) on_mouse_move(rel_x, rel_y int32) {
 func (self *v_mouse_controller) on_left_btn(up_down int32) {
 	if self.working {
 		if up_down == DOWN {
+			if self.left_downing == true { //重复的按下，可能是丢失松开事件了
+				self.touchHandlerInstance.touch_release(self.mouse_id)
+			}
 			self.left_downing = true
 			self.mouse_id = self.touchHandlerInstance.touch_require(self.mouse_x, self.mouse_y, touch_pos_scale)
+
 		} else {
 			self.left_downing = false
 			self.touchHandlerInstance.touch_release(self.mouse_id)
