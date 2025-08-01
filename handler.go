@@ -96,6 +96,7 @@ const (
 
 const (
 	touch_pos_scale uint8 = 8
+	// touch_pos_scale uint8 = 0
 )
 
 var HAT_D_U map[string]([]int32) = map[string]([]int32){
@@ -926,7 +927,7 @@ func (self *TouchHandler) mix_touch(touch_events chan *event_pack, max_mt_x, max
 						logger.Debugf("mixTouch\trequire\t[%d] translate_xy(%d,%d) => (%d,%d)", i, pos_s[i][0], pos_s[i][1], x, y)
 					} else {
 						self.touch_release(id_2_vid[i])
-						logger.Debugf("miTouch\trelease\t[%d] ", i)
+						logger.Debugf("mixTouch\trelease\t[%d] ", i)
 					}
 				} else {
 					if pos_s[i][0] != copy_pos_s[i][0] || pos_s[i][1] != copy_pos_s[i][1] {

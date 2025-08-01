@@ -596,6 +596,12 @@ func main() {
 			touch_control_func = handel_touch_using_input_manager(*usingInputManagerID)
 		} else {
 			touch_control_func = handel_touch_using_vTouch()
+			// for index, devType := range get_possible_device_indexes(make(map[int]bool)) {
+			// 	if devType == type_touch {
+			// 		touch_control_func = handel_touch_using_vTouch(index)
+			// 		break
+			// 	}
+			// }
 		}
 
 		map_switch_signal := make(chan bool) //通知虚拟鼠标当前为鼠标还是映射模式

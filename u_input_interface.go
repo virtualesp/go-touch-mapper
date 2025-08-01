@@ -12,6 +12,7 @@ import (
 	"unsafe"
 
 	"github.com/lunixbochs/struc"
+	"golang.org/x/sys/unix"
 
 	"github.com/kenshaw/evdev"
 )
@@ -87,6 +88,65 @@ func create_u_input_touch_screen(width int32, height int32) *os.File {
 	createDevice(deviceFile)
 	return deviceFile
 }
+
+// func create_u_input_touch_screen(index int) *os.File {
+// 	fd, err := os.OpenFile(fmt.Sprintf("/dev/input/event%d", index), os.O_RDONLY, 0)
+// 	if err != nil {
+// 		logger.Errorf("读取设备失败 : %v", err)
+// 		return nil
+// 	}
+// 	d := evdev.Open(fd)
+// 	defer d.Close()
+
+// 	deviceFile, err := os.OpenFile("/dev/uinput", syscall.O_WRONLY|syscall.O_NONBLOCK, 0660)
+// 	if err != nil {
+// 		logger.Errorf("create u_input touch_screen error:%v", err)
+// 		return nil
+// 	}
+
+// 	ioctl(deviceFile.Fd(), UISETEVBIT(), evKey)
+// 	for key := range d.KeyTypes() {
+// 		ioctl(deviceFile.Fd(), UISETKEYBIT(), uintptr(key)) //一个是BTN_TOUCH 一个不知道是啥
+// 	}
+
+// 	ioctl(deviceFile.Fd(), UISETEVBIT(), evAbs)
+// 	var initAbsVal [absCnt]int32
+// 	var initAbsMin [absCnt]int32
+// 	var initAbsMax [absCnt]int32
+// 	var initAbsFuzz [absCnt]int32
+// 	var initAbsFlat [absCnt]int32
+// 	var initAbsRes [absCnt]int32
+
+// 	for key, value := range d.AbsoluteTypes() {
+// 		ioctl(deviceFile.Fd(), UISETABSBIT(), uintptr(key))
+// 		initAbsVal[key] = value.Val
+// 		initAbsMin[key] = value.Min
+// 		initAbsMax[key] = value.Max
+// 		initAbsFuzz[key] = value.Fuzz
+// 		initAbsFlat[key] = value.Flat
+// 		initAbsRes[key] = value.Res
+// 	}
+
+// 	ioctl(deviceFile.Fd(), UISETPROPBIT(), inputPropDirect)
+
+// 	uiDev := UinputUserDev{
+// 		Name: toUInputName([]byte("v_touch_screen_KKK")),
+// 		ID: InputID{
+// 			BusType: 0,
+// 			Vendor:  randUInt16Num(0x2000),
+// 			Product: randUInt16Num(0x2000),
+// 			Version: randUInt16Num(0x20),
+// 		},
+// 		EffectsMax: 0,
+// 		AbsMax:     initAbsMax,
+// 		AbsMin:     initAbsMin,
+// 		AbsFuzz:    initAbsFlat,
+// 		AbsFlat:    initAbsFlat,
+// 	}
+// 	deviceFile.Write(uInputDevToBytes(uiDev))
+// 	createDevice(deviceFile)
+// 	return deviceFile
+// }
 
 func create_u_input_mouse_keyboard() *os.File {
 	deviceFile, err := os.OpenFile("/dev/uinput", syscall.O_WRONLY|syscall.O_NONBLOCK, 0660)
@@ -206,18 +266,39 @@ func get_wm_size() (int32, int32) {
 	return int32(width), int32(height)
 }
 
-func handel_touch_using_vTouch() touch_control_func {
+type EventMap struct {
+	data   []byte
+	Events []evdev.Event
+}
+
+func makeEventsMMap(size int) EventMap {
 	sizeofEvent := int(unsafe.Sizeof(evdev.Event{}))
-	sendEvents := func(fd *os.File, events []*evdev.Event) {
-		buf := make([]byte, sizeofEvent*len(events))
-		for i, event := range events {
-			copy(buf[i*sizeofEvent:], (*(*[1<<27 - 1]byte)(unsafe.Pointer(event)))[:sizeofEvent])
-		}
-		n, err := fd.Write(buf)
-		if err != nil {
-			logger.Errorf("handel_touch_using_vTouch error on writing %v bytes :%v", n, err)
-		}
-	}
+	var byteSlice = make([]byte, size)
+	dataPtr := unsafe.Pointer(&byteSlice[0])
+	eventSlice := unsafe.Slice((*evdev.Event)(dataPtr), size/sizeofEvent)
+	// return byteSlice, eventSlice
+	return EventMap{data: byteSlice, Events: eventSlice}
+}
+
+func handel_touch_using_vTouch() touch_control_func {
+	// sizeofEvent := int(unsafe.Sizeof(evdev.Event{}))
+	// sendEvents := func(fd *os.File, events []*evdev.Event) {
+	// 	buf := make([]byte, sizeofEvent*len(events))
+	// 	for i, event := range events {
+	// 		copy(buf[i*sizeofEvent:], (*(*[1<<27 - 1]byte)(unsafe.Pointer(event)))[:sizeofEvent])
+	// 	}
+	// 	start := time.Now()
+	// 	logger.Debugf("Bytes {%s}", hex.EncodeToString(buf))
+	// 	// n, err := fd.Write(buf)
+
+	// 	unix.Write(int(fd.Fd()), buf)
+
+	// 	logger.Debugf("sendEvents write %v bytes using %v", len(events)*24, time.Since(start))
+	// 	// if err != nil {
+	// 	// 	logger.Errorf("handel_touch_using_vTouch error on writing %v bytes :%v", n, err)
+	// 	// }
+
+	// }
 	rot_xy := func(pack touch_control_pack) (int32, int32) { //根据方向旋转坐标
 		switch global_device_orientation {
 		case 0:
@@ -232,58 +313,197 @@ func handel_touch_using_vTouch() touch_control_func {
 			return pack.x, pack.y
 		}
 	}
-	ev_sync := evdev.Event{Type: EV_SYN, Code: 0, Value: 0}
+	// ev_sync := evdev.Event{Type: EV_SYN, Code: 0, Value: 0}
 	var count int32 = 0    //BTN_TOUCH 申请时为1 则按下 释放时为0 则松开
 	var last_id int32 = -1 //ABS_MT_SLOT last_id每次动作后修改 如果不等则额外发送MT_SLOT事件
 	w, h := get_wm_size()
 	logger.Infof("已创建虚拟触屏 : %vx%v", w, h)
 	fd := create_u_input_touch_screen(w, h)
+	unixFd := int(fd.Fd())
+	// logger.Infof("已从/dev/input/event%d创建虚拟触屏", index)
+	// fd := create_u_input_touch_screen(index)
+
+	// nfd, _ := os.OpenFile("/dev/null", syscall.O_WRONLY|syscall.O_NONBLOCK, 0660)
+	// fd = nfd
 	go func() {
 		<-global_close_signal
 		fd.Close()
 	}()
 
+	// return func(control_data touch_control_pack) {
+	// 	// start := time.Now()
+	// 	write_events := make([]*evdev.Event, 0)
+	// 	if control_data.id == -1 { //在任何正常情况下 这里是拿不到ID=-1的控制包的因此可以直接丢弃
+	// 		return
+	// 	}
+	// 	if control_data.action == TouchActionRequire {
+	// 		last_id = control_data.id
+	// 		write_events = append(write_events, &evdev.Event{Type: EV_ABS, Code: ABS_MT_SLOT, Value: control_data.id})
+	// 		write_events = append(write_events, &evdev.Event{Type: EV_ABS, Code: ABS_MT_TRACKING_ID, Value: control_data.id})
+	// 		count += 1
+	// 		if count == 1 {
+	// 			write_events = append(write_events, &evdev.Event{Type: EV_KEY, Code: BTN_TOUCH, Value: DOWN})
+	// 		}
+	// 		x, y := rot_xy(control_data)
+	// 		write_events = append(write_events, &evdev.Event{Type: EV_ABS, Code: ABS_MT_POSITION_X, Value: x})
+	// 		write_events = append(write_events, &evdev.Event{Type: EV_ABS, Code: ABS_MT_POSITION_Y, Value: y})
+	// 		write_events = append(write_events, &ev_sync)
+	// 		sendEvents(fd, write_events)
+	// 	} else if control_data.action == TouchActionRelease {
+	// 		if last_id != control_data.id {
+	// 			last_id = control_data.id
+	// 			write_events = append(write_events, &evdev.Event{Type: EV_ABS, Code: ABS_MT_SLOT, Value: control_data.id})
+	// 		}
+	// 		write_events = append(write_events, &evdev.Event{Type: EV_ABS, Code: ABS_MT_TRACKING_ID, Value: -1})
+	// 		count -= 1
+	// 		if count == 0 {
+	// 			write_events = append(write_events, &evdev.Event{Type: EV_KEY, Code: BTN_TOUCH, Value: UP})
+	// 		}
+	// 		write_events = append(write_events, &ev_sync)
+	// 		sendEvents(fd, write_events)
+	// 	} else if control_data.action == TouchActionMove {
+	// 		if last_id != control_data.id {
+	// 			last_id = control_data.id
+	// 			write_events = append(write_events, &evdev.Event{Type: EV_ABS, Code: ABS_MT_SLOT, Value: control_data.id})
+	// 		}
+	// 		x, y := rot_xy(control_data)
+	// 		write_events = append(write_events, &evdev.Event{Type: EV_ABS, Code: ABS_MT_POSITION_X, Value: x})
+	// 		write_events = append(write_events, &evdev.Event{Type: EV_ABS, Code: ABS_MT_POSITION_Y, Value: y})
+	// 		write_events = append(write_events, &ev_sync)
+	// 		sendEvents(fd, write_events)
+	// 	}
+	// 	// logger.Debugf("uinput handeler%v", time.Since(start))
+	// }
+
+	require_init := makeEventsMMap(6 * 24)
+	require := makeEventsMMap(5 * 24)
+
+	release := makeEventsMMap(2 * 24)
+	switch_release := makeEventsMMap(3 * 24)
+	switch_release_btnup := makeEventsMMap(4 * 24)
+	release_btnup := makeEventsMMap(3 * 24)
+
+	switch_move := makeEventsMMap(4 * 24)
+	move := makeEventsMMap(3 * 24)
+
+	require_init.Events[0] = evdev.Event{Type: EV_ABS, Code: ABS_MT_SLOT, Value: 0}
+	require_init.Events[1] = evdev.Event{Type: EV_ABS, Code: ABS_MT_TRACKING_ID, Value: 0}
+	require_init.Events[2] = evdev.Event{Type: EV_KEY, Code: BTN_TOUCH, Value: DOWN}
+	require_init.Events[3] = evdev.Event{Type: EV_ABS, Code: ABS_MT_POSITION_X, Value: 0}
+	require_init.Events[4] = evdev.Event{Type: EV_ABS, Code: ABS_MT_POSITION_Y, Value: 0}
+	require_init.Events[5] = evdev.Event{Type: EV_SYN, Code: 0, Value: 0}
+
+	require.Events[0] = evdev.Event{Type: EV_ABS, Code: ABS_MT_SLOT, Value: 0}
+	require.Events[1] = evdev.Event{Type: EV_ABS, Code: ABS_MT_TRACKING_ID, Value: 0}
+	require.Events[2] = evdev.Event{Type: EV_ABS, Code: ABS_MT_POSITION_X, Value: 0}
+	require.Events[3] = evdev.Event{Type: EV_ABS, Code: ABS_MT_POSITION_Y, Value: 0}
+	require.Events[4] = evdev.Event{Type: EV_SYN, Code: 0, Value: 0}
+
+	release.Events[0] = evdev.Event{Type: EV_ABS, Code: ABS_MT_TRACKING_ID, Value: -1}
+	release.Events[1] = evdev.Event{Type: EV_SYN, Code: 0, Value: 0}
+
+	switch_release.Events[0] = evdev.Event{Type: EV_ABS, Code: ABS_MT_SLOT, Value: 0}
+	switch_release.Events[1] = evdev.Event{Type: EV_ABS, Code: ABS_MT_TRACKING_ID, Value: -1}
+	switch_release.Events[2] = evdev.Event{Type: EV_SYN, Code: 0, Value: 0}
+
+	switch_release_btnup.Events[0] = evdev.Event{Type: EV_ABS, Code: ABS_MT_SLOT, Value: 0}
+	switch_release_btnup.Events[1] = evdev.Event{Type: EV_ABS, Code: ABS_MT_TRACKING_ID, Value: -1}
+	switch_release_btnup.Events[2] = evdev.Event{Type: EV_KEY, Code: BTN_TOUCH, Value: UP}
+	switch_release_btnup.Events[3] = evdev.Event{Type: EV_SYN, Code: 0, Value: 0}
+
+	release_btnup.Events[0] = evdev.Event{Type: EV_ABS, Code: ABS_MT_TRACKING_ID, Value: -1}
+	release_btnup.Events[1] = evdev.Event{Type: EV_KEY, Code: BTN_TOUCH, Value: UP}
+	release_btnup.Events[2] = evdev.Event{Type: EV_SYN, Code: 0, Value: 0}
+
+	switch_move.Events[0] = evdev.Event{Type: EV_ABS, Code: ABS_MT_SLOT, Value: 0}
+	switch_move.Events[1] = evdev.Event{Type: EV_ABS, Code: ABS_MT_POSITION_X, Value: 0}
+	switch_move.Events[2] = evdev.Event{Type: EV_ABS, Code: ABS_MT_POSITION_Y, Value: 0}
+	switch_move.Events[3] = evdev.Event{Type: EV_SYN, Code: 0, Value: 0}
+
+	move.Events[0] = evdev.Event{Type: EV_ABS, Code: ABS_MT_POSITION_X, Value: 0}
+	move.Events[1] = evdev.Event{Type: EV_ABS, Code: ABS_MT_POSITION_Y, Value: 0}
+
+	// type pack struct {
+	// 	data []byte
+	// 	ts   time.Time
+	// }
+	// packChan := make(chan pack, 1)
+	// go (func() {
+	// 	for {
+	// 		select {
+	// 		case tmp := <-packChan:
+	// 			unix.Write(unixFd, tmp.data)
+	// 			logger.Debugf("using chan %v", time.Since(tmp.ts))
+	// 		default:
+	// 			unix.Write(unixFd, []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0})
+	// 		}
+	// 	}
+	// })()
+
 	return func(control_data touch_control_pack) {
-		write_events := make([]*evdev.Event, 0)
+		// write_events := make([]*evdev.Event, 0)
+		// start := time.Now()
 		if control_data.id == -1 { //在任何正常情况下 这里是拿不到ID=-1的控制包的因此可以直接丢弃
 			return
 		}
 		if control_data.action == TouchActionRequire {
-			last_id = control_data.id
-			write_events = append(write_events, &evdev.Event{Type: EV_ABS, Code: ABS_MT_SLOT, Value: control_data.id})
-			write_events = append(write_events, &evdev.Event{Type: EV_ABS, Code: ABS_MT_TRACKING_ID, Value: control_data.id})
-			count += 1
-			if count == 1 {
-				write_events = append(write_events, &evdev.Event{Type: EV_KEY, Code: BTN_TOUCH, Value: DOWN})
-			}
 			x, y := rot_xy(control_data)
-			write_events = append(write_events, &evdev.Event{Type: EV_ABS, Code: ABS_MT_POSITION_X, Value: x})
-			write_events = append(write_events, &evdev.Event{Type: EV_ABS, Code: ABS_MT_POSITION_Y, Value: y})
-			write_events = append(write_events, &ev_sync)
-			sendEvents(fd, write_events)
+			last_id = control_data.id
+			if count += 1; count == 1 {
+				require_init.Events[0].Value = control_data.id
+				require_init.Events[1].Value = control_data.id
+				require_init.Events[3].Value = x
+				require_init.Events[4].Value = y
+				unix.Write(unixFd, require_init.data)
+				// packChan <- pack{data: require_init.data, ts: start}
+			} else {
+				require.Events[0].Value = control_data.id
+				require.Events[1].Value = control_data.id
+				require.Events[2].Value = x
+				require.Events[3].Value = y
+				unix.Write(unixFd, require.data)
+				// packChan <- pack{data: require.data, ts: start}
+
+			}
+
 		} else if control_data.action == TouchActionRelease {
 			if last_id != control_data.id {
 				last_id = control_data.id
-				write_events = append(write_events, &evdev.Event{Type: EV_ABS, Code: ABS_MT_SLOT, Value: control_data.id})
+				if count -= 1; count == 0 {
+					switch_release_btnup.Events[0].Value = control_data.id
+					unix.Write(unixFd, switch_release_btnup.data)
+					// packChan <- pack{data: switch_release_btnup.data, ts: start}
+				} else {
+					switch_release.Events[0].Value = control_data.id
+					unix.Write(unixFd, switch_release.data)
+					// packChan <- pack{data: switch_release.data, ts: start}
+				}
+			} else {
+				if count -= 1; count == 0 {
+					unix.Write(unixFd, release_btnup.data)
+					// packChan <- pack{data: release_btnup.data, ts: start}
+				} else {
+					unix.Write(unixFd, release.data)
+					// packChan <- pack{data: release.data, ts: start}
+				}
 			}
-			write_events = append(write_events, &evdev.Event{Type: EV_ABS, Code: ABS_MT_TRACKING_ID, Value: -1})
-			count -= 1
-			if count == 0 {
-				write_events = append(write_events, &evdev.Event{Type: EV_KEY, Code: BTN_TOUCH, Value: UP})
-			}
-			write_events = append(write_events, &ev_sync)
-			sendEvents(fd, write_events)
 		} else if control_data.action == TouchActionMove {
+			x, y := rot_xy(control_data)
 			if last_id != control_data.id {
 				last_id = control_data.id
-				write_events = append(write_events, &evdev.Event{Type: EV_ABS, Code: ABS_MT_SLOT, Value: control_data.id})
-			}
-			x, y := rot_xy(control_data)
-			write_events = append(write_events, &evdev.Event{Type: EV_ABS, Code: ABS_MT_POSITION_X, Value: x})
-			write_events = append(write_events, &evdev.Event{Type: EV_ABS, Code: ABS_MT_POSITION_Y, Value: y})
-			write_events = append(write_events, &ev_sync)
-			sendEvents(fd, write_events)
-		}
-	}
+				switch_move.Events[0].Value = control_data.id
+				switch_move.Events[1].Value = x
+				switch_move.Events[2].Value = y
+				unix.Write(unixFd, switch_move.data)
+				// packChan <- pack{data: switch_move.data, ts: start}
 
+			} else {
+				move.Events[0].Value = x
+				move.Events[1].Value = y
+				unix.Write(unixFd, move.data)
+				// packChan <- pack{data: move.data, ts: start}
+			}
+		}
+		// logger.Debugf("uinput handeler%v", time.Since(start))
+	}
 }
