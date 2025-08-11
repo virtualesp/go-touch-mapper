@@ -126,7 +126,7 @@ const CostumedInput = ({ defaultValue, width, onCommit }) => {
 
 const WheelShow = ({ x, y, range, shift_range }) => {
     const radius = range * 2
-    const shift_radius = shift_range *2
+    const shift_radius = shift_range * 2
     return <div>
         <div style={{
             position: 'absolute',
@@ -168,6 +168,47 @@ const WheelShow = ({ x, y, range, shift_range }) => {
         }
     </div>
 }
+
+
+const ViewShow = ({ x, y }) => {
+    // 视角中心点显示
+    //在屏幕上显示两条垂直线，中间是一个小的空心圆
+    return <div>
+        <div style={{
+            position: 'absolute',
+            left: 0,
+            top: y ,
+            width: "100vw",
+            height: 1,
+            backgroundColor: "#d90051",
+            pointerEvents: "none",
+        }} />
+        <div style={{
+            position: 'absolute',
+            left: x,
+            top: 0,
+            height: "100vh",
+            width: 1,
+            backgroundColor: "#d90051",
+            pointerEvents: "none",
+        }} />
+        <div style={{
+            position: 'absolute',
+            left: x,
+            top: y,
+            width: 32,
+            height: 32,
+            borderRadius: 16,
+            marginLeft: -16,
+            marginTop: -16,
+            border: "2px solid #d90051",
+            backgroundColor: "#transparent",
+            pointerEvents: "none",
+        }} />
+    </div>
+}
+
+
 export {
     UploadButton,
     UploadButtonJIETU,
@@ -176,4 +217,5 @@ export {
     GroupFixedIcon,
     CostumedInput,
     WheelShow,
+    ViewShow,
 }

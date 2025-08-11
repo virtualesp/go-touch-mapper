@@ -17,53 +17,54 @@ import (
 )
 
 type TouchHandler struct {
-	events                    chan *event_pack            //接收事件的channel
-	touch_control_func        touch_control_func          //发送触屏控制信号的channel
-	u_input                   chan *u_input_control_pack  //发送u_input控制信号的channel
-	map_on                    bool                        //映射模式开关
-	view_id                   int32                       //视角的触摸ID
-	wheel_id                  int32                       //左摇杆的触摸ID
-	allocated_id              []bool                      //10个触摸点分配情况
-	config                    *simplejson.Json            //映射配置文件
-	joystickInfo              map[string]*simplejson.Json //所有摇杆配置文件 dev_name 为key
-	screen_x                  int32                       //屏幕宽度
-	screen_y                  int32                       //屏幕高度
-	rel_screen_x              int32
-	rel_screen_y              int32
-	view_init_x               int32 //初始化视角映射的x坐标
-	view_init_y               int32 //初始化视角映射的y坐标
-	view_current_x            int32 //当前视角映射的x坐标
-	view_current_y            int32 //当前视角映射的y坐标
-	view_speed_x              int32 //视角x方向的速度
-	view_speed_y              int32 //视角y方向的速度
-	rs_speed_x                float64
-	rs_speed_y                float64
-	wheel_init_x              int32 //初始化左摇杆映射的x坐标
-	wheel_init_y              int32 //初始化左摇杆映射的y坐标
-	wheel_range               int32 //左摇杆的x轴范围
-	wheel_wasd                []string
-	view_lock                 sync.Mutex //视角控制相关的锁 用于自动释放和控制相关
-	wheel_lock                sync.Mutex //左摇杆控制相关的锁 用于自动释放和控制相关
-	touch_control_lock        sync.Mutex
-	auto_release_view_count   int32    //自动释放计时器 有视角移动则重置 否则100ms加一 超过1s 自动释放
-	abs_last                  sync.Map //abs值的上一次值 用于手柄
-	using_joystick_name       string   //当前正在使用的手柄 针对不同手柄死区不同 但程序支持同时插入多个手柄 因此会识别最进发送事件的手柄作为死区配置
-	ls_wheel_released         bool     //左摇杆滚轮释放
-	wasd_wheel_released       bool     //wasd滚轮释放 两个都释放时 轮盘才会释放
-	wasd_wheel_last_x         int32    //wasd滚轮上一次的x坐标
-	wasd_wheel_last_y         int32    //wasd滚轮上一次的y坐标
-	wasd_up_down_statues      []bool
-	key_action_state_save     sync.Map
-	BTN_SELECT_UP_DOWN        int32
-	KEYBOARD_SWITCH_KEY_NAME  string
-	view_range_limited        bool //视角是否有界
-	map_switch_signal         chan bool
-	measure_sensitivity_mode  bool  //计算模式
-	total_move_x              int32 //视角总移动距离x
-	total_move_y              int32 //视角总移动距离y
-	wheel_shift_enable        bool  //启用shift轮盘
-	wheel_shift_switch_enable bool  //shift轮盘切换 or 长按
-	wheel_shift_range         int32
+	events                  chan *event_pack            //接收事件的channel
+	touch_control_func      touch_control_func          //发送触屏控制信号的channel
+	u_input                 chan *u_input_control_pack  //发送u_input控制信号的channel
+	map_on                  bool                        //映射模式开关
+	view_id                 int32                       //视角的触摸ID
+	wheel_id                int32                       //左摇杆的触摸ID
+	allocated_id            []bool                      //10个触摸点分配情况
+	config                  *simplejson.Json            //映射配置文件
+	joystickInfo            map[string]*simplejson.Json //所有摇杆配置文件 dev_name 为key
+	screen_x                int32                       //屏幕宽度
+	screen_y                int32                       //屏幕高度
+	rel_screen_x            int32
+	rel_screen_y            int32
+	view_init_x             int32 //初始化视角映射的x坐标
+	view_init_y             int32 //初始化视角映射的y坐标
+	view_current_x          int32 //当前视角映射的x坐标
+	view_current_y          int32 //当前视角映射的y坐标
+	view_speed_x            int32 //视角x方向的速度
+	view_speed_y            int32 //视角y方向的速度
+	rs_speed_x              float64
+	rs_speed_y              float64
+	wheel_init_x            int32 //初始化左摇杆映射的x坐标
+	wheel_init_y            int32 //初始化左摇杆映射的y坐标
+	wheel_range             int32 //左摇杆的x轴范围
+	wheel_wasd              []string
+	view_lock               sync.Mutex //视角控制相关的锁 用于自动释放和控制相关
+	wheel_lock              sync.Mutex //左摇杆控制相关的锁 用于自动释放和控制相关
+	touch_control_lock      sync.Mutex
+	auto_release_view_count int32    //自动释放计时器 有视角移动则重置 否则100ms加一 超过1s 自动释放
+	abs_last                sync.Map //abs值的上一次值 用于手柄
+	using_joystick_name     string   //当前正在使用的手柄 针对不同手柄死区不同 但程序支持同时插入多个手柄 因此会识别最进发送事件的手柄作为死区配置
+	ls_wheel_released       bool     //左摇杆滚轮释放
+	wasd_wheel_released     bool     //wasd滚轮释放 两个都释放时 轮盘才会释放
+	wasd_wheel_last_x       int32    //wasd滚轮上一次的x坐标
+	wasd_wheel_last_y       int32    //wasd滚轮上一次的y坐标
+	wasd_up_down_statues    []bool
+	key_action_state_save   sync.Map
+	BTN_SELECT_UP_DOWN      int32
+	// KEYBOARD_SWITCH_KEY_NAME  string
+	KEYBOARD_SWITCH_KEY_NAME_S map[string]bool //键盘切换映射的按键集合
+	view_range_limited         bool            //视角是否有界
+	map_switch_signal          chan bool
+	measure_sensitivity_mode   bool  //计算模式
+	total_move_x               int32 //视角总移动距离x
+	total_move_y               int32 //视角总移动距离y
+	wheel_shift_enable         bool  //启用shift轮盘
+	wheel_shift_switch_enable  bool  //shift轮盘切换 or 长按
+	wheel_shift_range          int32
 }
 
 const (
@@ -178,6 +179,15 @@ func InitTouchHandler(
 	screenSizeX := config_json.Get("SCREEN").Get("SIZE").GetIndex(0).MustInt()
 	screenSizeY := config_json.Get("SCREEN").Get("SIZE").GetIndex(1).MustInt()
 
+	KEYBOARD_SWITCH_KEY_NAME_S := make(map[string]bool)
+	for _, key := range config_json.Get("MOUSE").Get("SWITCH_KEYS").MustStringArray() {
+		if key != "" {
+			KEYBOARD_SWITCH_KEY_NAME_S[key] = true
+		} else {
+			logger.Warnf("映射配置文件中有空的键盘切换按键,请检查配置文件")
+		}
+	}
+
 	return &TouchHandler{
 		events:             events,
 		touch_control_func: touch_control_func,
@@ -212,26 +222,27 @@ func InitTouchHandler(
 			config_json.Get("WHEEL").Get("WASD").GetIndex(2).MustString(),
 			config_json.Get("WHEEL").Get("WASD").GetIndex(3).MustString(),
 		},
-		view_lock:                 sync.Mutex{},
-		wheel_lock:                sync.Mutex{},
-		touch_control_lock:        sync.Mutex{},
-		auto_release_view_count:   0,
-		abs_last:                  abs_last_map,
-		using_joystick_name:       "",
-		ls_wheel_released:         true,
-		wasd_wheel_released:       true,
-		wasd_wheel_last_x:         int32(config_json.Get("WHEEL").Get("POS").GetIndex(0).MustFloat64() * float64(screenSizeX)),
-		wasd_wheel_last_y:         int32(config_json.Get("WHEEL").Get("POS").GetIndex(1).MustFloat64() * float64(screenSizeY)),
-		wasd_up_down_statues:      make([]bool, 5), //放置wasd的状态与shift启用下，shift的状态
-		key_action_state_save:     sync.Map{},
-		BTN_SELECT_UP_DOWN:        0,
-		KEYBOARD_SWITCH_KEY_NAME:  config_json.Get("MOUSE").Get("SWITCH_KEY").MustString(),
-		view_range_limited:        view_range_limited,
-		map_switch_signal:         map_switch_signal,
-		measure_sensitivity_mode:  measure_sensitivity_mode,
-		wheel_shift_enable:        config_json.Get("WHEEL").Get("SHIFT_RANGE_ENABLE").MustBool(),
-		wheel_shift_switch_enable: config_json.Get("WHEEL").Get("SHIFT_RANGE_SWITCH_ENABLE").MustBool(),
-		wheel_shift_range:         int32(config_json.Get("WHEEL").Get("SHIFT_RANGE").MustFloat64() * float64(screenSizeX)),
+		view_lock:               sync.Mutex{},
+		wheel_lock:              sync.Mutex{},
+		touch_control_lock:      sync.Mutex{},
+		auto_release_view_count: 0,
+		abs_last:                abs_last_map,
+		using_joystick_name:     "",
+		ls_wheel_released:       true,
+		wasd_wheel_released:     true,
+		wasd_wheel_last_x:       int32(config_json.Get("WHEEL").Get("POS").GetIndex(0).MustFloat64() * float64(screenSizeX)),
+		wasd_wheel_last_y:       int32(config_json.Get("WHEEL").Get("POS").GetIndex(1).MustFloat64() * float64(screenSizeY)),
+		wasd_up_down_statues:    make([]bool, 5), //放置wasd的状态与shift启用下，shift的状态
+		key_action_state_save:   sync.Map{},
+		BTN_SELECT_UP_DOWN:      0,
+		// KEYBOARD_SWITCH_KEY_NAME:  config_json.Get("MOUSE").Get("SWITCH_KEY").MustString(),
+		KEYBOARD_SWITCH_KEY_NAME_S: KEYBOARD_SWITCH_KEY_NAME_S,
+		view_range_limited:         view_range_limited,
+		map_switch_signal:          map_switch_signal,
+		measure_sensitivity_mode:   measure_sensitivity_mode,
+		wheel_shift_enable:         config_json.Get("WHEEL").Get("SHIFT_RANGE_ENABLE").MustBool(),
+		wheel_shift_switch_enable:  config_json.Get("WHEEL").Get("SHIFT_RANGE_SWITCH_ENABLE").MustBool(),
+		wheel_shift_range:          int32(config_json.Get("WHEEL").Get("SHIFT_RANGE").MustFloat64() * float64(screenSizeX)),
 	}
 }
 
@@ -271,7 +282,17 @@ func (self *TouchHandler) reloadConfigure(mapperFilePath string) {
 	}
 	self.wasd_wheel_last_x = int32(config_json.Get("WHEEL").Get("POS").GetIndex(0).MustFloat64() * float64(screenSizeX))
 	self.wasd_wheel_last_y = int32(config_json.Get("WHEEL").Get("POS").GetIndex(1).MustFloat64() * float64(screenSizeY))
-	self.KEYBOARD_SWITCH_KEY_NAME = config_json.Get("MOUSE").Get("SWITCH_KEY").MustString()
+	// self.KEYBOARD_SWITCH_KEY_NAME = config_json.Get("MOUSE").Get("SWITCH_KEY").MustString()
+	// self.KEYBOARD_SWITCH_KEY_NAME_S = config_json.Get("MOUSE").Get("SWITCH_KEYS").MustStringArray()
+	self.KEYBOARD_SWITCH_KEY_NAME_S = make(map[string]bool)
+	for _, key := range config_json.Get("MOUSE").Get("SWITCH_KEYS").MustStringArray() {
+		if key != "" {
+			self.KEYBOARD_SWITCH_KEY_NAME_S[key] = true
+		} else {
+			logger.Warnf("映射配置文件中有空的键盘切换按键,请检查配置文件")
+		}
+	}
+
 	self.wheel_shift_enable = config_json.Get("WHEEL").Get("SHIFT_RANGE_ENABLE").MustBool()
 	self.wheel_shift_range = int32(config_json.Get("WHEEL").Get("SHIFT_RANGE").MustFloat64() * float64(screenSizeX))
 }
@@ -685,7 +706,7 @@ func (self *TouchHandler) handel_key_up_down(key_name string, up_down int32, dev
 		}
 	}
 
-	if key_name == self.KEYBOARD_SWITCH_KEY_NAME { //屏蔽切换键
+	if self.KEYBOARD_SWITCH_KEY_NAME_S[key_name] {
 		if up_down == UP {
 			self.switch_map_mode()
 		}
@@ -742,7 +763,6 @@ func (self *TouchHandler) handel_key_up_down(key_name string, up_down int32, dev
 			}
 		} else {
 			logger.Debugf("key[%s]\t无触屏映射", key_name)
-			return
 		}
 	} else {
 		if jsconfig, ok := self.joystickInfo[dev_name]; ok {

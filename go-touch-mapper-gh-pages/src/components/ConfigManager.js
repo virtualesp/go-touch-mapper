@@ -20,6 +20,7 @@ import {
     GroupFixedIcon,
     CostumedInput,
     WheelShow,
+    ViewShow,
 } from "./UIcomponents"
 import { produce } from "immer"
 import FullscreenIcon from '@mui/icons-material/Fullscreen';
@@ -116,9 +117,9 @@ export default function ConfigManager() {
             ]
         },
         "MOUSE": {
-            "SWITCH_KEY": "KEY_GRAVE",
+            "SWITCH_KEYS": ["KEY_GRAVE"],
             "POS": [
-                0.6,
+                0.52,
                 0.5
             ],
             "SPEED": [
@@ -249,7 +250,10 @@ export default function ConfigManager() {
     const getDisplayValueY = useCallback((value) => { return parseInt(value * config["SCREEN"]["SIZE"][1]) }, [config["SCREEN"]["SIZE"]])
     const getPostionValueX = useCallback((value) => { return parseInt(value * imgSize[0]) }, [imgSize])
     const getPostionValueY = useCallback((value) => { return parseInt(value * imgSize[1]) }, [imgSize])
-    // memos
+
+    const viewCenterSetting = useRef(false)
+    const addingSwitchKey = useRef(false)
+    const [addingSwitchKeyInfoText, setAddingSwitchKeyInfoText] = useState("添加映射切换键")
 
     const handleFileChange = (e) => {
         // setUploadButton(false);
@@ -285,6 +289,17 @@ export default function ConfigManager() {
         if (x > 1 || y > 1) {//忽略大于屏幕的
             return
         }
+        if (viewCenterSetting.current) {
+            setConfig(produce(draft => {
+                draft.MOUSE.POS = [
+                    x, y
+                ]
+            }))
+            viewCenterSetting.current = false
+            return
+        }
+
+
         if (key !== null) {
             if (key === "REL_WHEEL_UP" || key == "REL_WHEEL_DOWN") {
                 setConfig(produce(draft => {
@@ -309,7 +324,7 @@ export default function ConfigManager() {
                 }))
             }
             if (["BTN_LEFT", "BTN_MIDDLE", "BTN_RIGHT", "BTN_SIDE", "BTN_EXTRA", "REL_WHEEL_DOWN", "REL_WHEEL_UP"].indexOf(key) !== -1) {
-                 setSelectKEY(null)
+                setSelectKEY(null)
             }
         } else {
             if (window.dispatchEvent) {
@@ -319,7 +334,6 @@ export default function ConfigManager() {
             } else {
                 window.fireEvent(new CustomEvent('imgOnNoKeyClick', {
                     detail: { x: x, y: y }
-
                 }));
             }
 
@@ -440,7 +454,6 @@ export default function ConfigManager() {
                     }}
                 >{exportButtonText}</Button>
 
-
                 <Grid
                     container
                     direction="row"
@@ -545,6 +558,89 @@ export default function ConfigManager() {
                         setConfig(produce(draft => { draft.MOUSE.SPEED[1] = value; }))
                     }} width="40px" />
                 </Grid>
+                <Grid
+                    container
+                    direction="row"
+                    justifyContent="flex-start"
+                    alignItems="center"
+                    sx={{
+                        height: "50px",
+                    }}
+                >
+                    <Grid
+                        container
+                        direction="row"
+                        justifyContent="flex-start"
+                        alignItems="center"
+                        sx={{
+                            height: "50px",
+                        }}>
+                        <a>{`视角中心位置:(${parseInt(config["MOUSE"]["POS"][0] * config["SCREEN"]["SIZE"][0])} , ${parseInt(config["MOUSE"]["POS"][1] * config["SCREEN"]["SIZE"][1])})`} </a>
+                        <Button onClick={() => { viewCenterSetting.current = true }} disabled={setPosButtonDisabled} sx={{ height: "30px", marginLeft: "10px" }} variant="outlined"  >重设</Button>
+
+                    </Grid>
+                </Grid>
+
+                <Grid
+                    container
+                    direction="row"
+                    justifyContent="flex-start"
+                    alignItems="center"
+                    sx={{
+                        // height: "50px",
+                    }}
+                    spacing={1}
+                >
+                    <Grid item xs={12}>
+
+                        <Typography
+                            sx={{
+                                width: "100%",
+                                marginTop: "10px",
+                            }}
+                        >
+                            映射切换按键：
+                        </Typography>
+                    </Grid>
+                    {config["MOUSE"]["SWITCH_KEYS"].map((key, index) => {
+                        return <Grid item key={index}>
+                            <Button
+                                key={index}
+                                onClick={() => {
+                                    setConfig(produce(draft => {
+                                        draft.MOUSE.SWITCH_KEYS.splice(index, 1)
+                                    }))
+                                }}
+                                variant="outlined"
+                                sx={{
+                                    width: "100%",
+                                }}
+                            ><Typography noWrap>{key}</Typography>
+                                <HighlightOffIcon />
+                            </Button>
+                        </Grid>
+                    })}
+                    <Grid item key={"添加切换按键"}>
+                        <Button
+                            key={"添加切换按键"}
+                            onClick={() => {
+                                addingSwitchKey.current = true;
+                                setAddingSwitchKeyInfoText("按下按键以添加")
+                            }}
+                            variant="contained"
+                            sx={{
+                                width: "100%",
+                                // marginTop: "10px",
+                            }}
+                        ><Typography noWrap>{addingSwitchKeyInfoText}</Typography>
+                        </Button>
+                    </Grid>
+
+                </Grid>
+
+
+
+
                 <Grid
                     container
                     direction="row"
@@ -853,7 +949,19 @@ export default function ConfigManager() {
         document.onkeydown = (e) => {
             if (e.repeat === false && window.stopPreventDefault !== true) {
                 e.preventDefault();
-                setSelectKEY(keyNameMap[e.code.toLowerCase()])
+                if (addingSwitchKey.current) {
+                    setConfig(produce(draft => {
+                        if (draft.MOUSE.SWITCH_KEYS.indexOf(keyNameMap[e.code.toLowerCase()]) === -1) {
+                            draft.MOUSE.SWITCH_KEYS.push(keyNameMap[e.code.toLowerCase()])
+                            setAddingSwitchKeyInfoText("添加映射切换键")
+                        } else {
+                            setAddingSwitchKeyInfoText("已存在，请重新添加")
+
+                        }
+                    }))
+                } else {
+                    setSelectKEY(keyNameMap[e.code.toLowerCase()])
+                }
             }
         }
         document.onkeyup = (e) => {
@@ -880,8 +988,6 @@ export default function ConfigManager() {
             })
     }, [])
 
-
-
     const KeyShow = ({ data }) => {
         return <div>
             {data["TYPE"] === "PRESS" || data["TYPE"] === "AUTO_FIRE" || data["TYPE"] === "CLICK" ? <FixedIcon x={getPostionValueX(data["POS"][0])} y={getPostionValueY(data["POS"][1])} text={data["KEY"]} /> : null}
@@ -889,8 +995,6 @@ export default function ConfigManager() {
             {data["TYPE"] === "DRAG" ? <GroupFixedIcon pos_s={data["POS_S"].map(([x, y]) => [getPostionValueX(x), getPostionValueY(y)])} text={data["KEY"]} bgColor={"#3F51B5"} textColor={"#ffffff"} /> : null}
         </div>
     }
-
-
 
     return <div style={{
         width: '100vw',
@@ -957,5 +1061,6 @@ export default function ConfigManager() {
             range={getPostionValueX(config["WHEEL"]["RANGE"])}
             shift_range={config["WHEEL"]["SHIFT_RANGE_ENABLE"] ? getPostionValueX(config["WHEEL"]["SHIFT_RANGE"]) : 0}
         />
+        <ViewShow x={getPostionValueX(config["MOUSE"]["POS"][0])} y={getPostionValueY(config["MOUSE"]["POS"][1])} />
     </div>
 }
