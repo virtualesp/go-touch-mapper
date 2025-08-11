@@ -162,13 +162,12 @@ func create_js_info_file(index int) {
 	abs := d.AbsoluteTypes()
 	keys := d.KeyTypes()
 	logger.Infof("找到设备 : %s", dev_name)
-	// for k, v := range abs {
-	// 	logger.Infof("Absolute : %d", int(k))
-	// 	logger.Infof("\t%d,%d", v.Min, v.Max)
-	// }
-	// for k, _ := range keys {
-	// 	logger.Infof("Key : %d", int(k))
-	// }
+	for k, v := range abs {
+		logger.Infof("Absolute : %s\t(%d,%d)", abs_type_friendly_mame[uint16(k)], v.Min, v.Max)
+	}
+	for k := range keys {
+		logger.Infof("Key : %d", int(k))
+	}
 
 	output := simplejson.New()
 	LS_DZ, _ := simplejson.New().Array()
@@ -193,6 +192,9 @@ func create_js_info_file(index int) {
 	LT_RT_BTN := false
 	HAT0X, HAT0X_ok := abs[16]
 	HAT0Y, HAT0Y_ok := abs[17]
+
+	need_keys := []string{"BTN_A", "BTN_B", "BTN_X", "BTN_Y", "BTN_LS", "BTN_RS", "BTN_LB", "BTN_RB", "BTN_SELECT", "BTN_START", "BTN_HOME"}
+
 	if HAT0X_ok && HAT0Y_ok {
 		output.SetPath([]string{"ABS", "16"}, create_abs_rec("HAT0X", HAT0X.Min, HAT0X.Max))
 		output.SetPath([]string{"ABS", "17"}, create_abs_rec("HAT0Y", HAT0Y.Min, HAT0Y.Max))
@@ -209,17 +211,25 @@ func create_js_info_file(index int) {
 		}
 	} else {
 		logger.Warnf("未知DPAD种类 : %s", dev_name)
-		return
+		need_keys = append(need_keys, "BTN_DPAD_UP", "BTN_DPAD_DOWN", "BTN_DPAD_LEFT", "BTN_DPAD_RIGHT")
 	}
 
-	need_keys := []string{"BTN_A", "BTN_B", "BTN_X", "BTN_Y", "BTN_LS", "BTN_RS", "BTN_LB", "BTN_RB", "BTN_SELECT", "BTN_START", "BTN_HOME"}
 	if LT_RT_BTN {
 		need_keys = append(need_keys, "BTN_LT", "BTN_RT")
 	}
 
+	mapped := make(map[uint16]bool)
+
 	for _, key_name := range need_keys {
-		logger.Infof("按下按键 %s", key_name)
-		output.SetPath([]string{"BTN", fmt.Sprintf("%d", get_key(pack_ch))}, key_name)
+		logger.Infof("正在设置 %s , 请按下对应的按键 , 按下已设置的按键的可跳过", key_name)
+		userKey := get_key(pack_ch)
+		if mapped[userKey] {
+			logger.Warnf("跳过%s ", key_name)
+		} else {
+			mapped[userKey] = true
+			logger.Infof("设置 %s 为 %d", key_name, userKey)
+			output.SetPath([]string{"BTN", fmt.Sprintf("%d", userKey)}, key_name)
+		}
 	}
 	abs_map := get_abs_map(abs, pack_ch, LT_RT_BTN)
 	for k, v := range abs_map {

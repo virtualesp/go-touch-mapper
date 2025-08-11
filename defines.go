@@ -8,7 +8,7 @@ import (
 
 //---------------------------------EVCodes--------------------------------------//
 
-//Ref: input-event-codes.h
+// Ref: input-event-codes.h
 const (
 	evSyn           = 0x00
 	evKey           = 0x01
@@ -38,7 +38,7 @@ const (
 
 //---------------------------------IOCTL--------------------------------------//
 
-//Ref: ioctl.h
+// Ref: ioctl.h
 const (
 	iocNone  = 0x0
 	iocWrite = 0x1
@@ -67,7 +67,7 @@ func _IOW(t int, nr int, size int) int {
 	return _IOC(iocWrite, t, nr, size)
 }
 
-//Ref: input.h
+// Ref: input.h
 func EVIOCGNAME() int {
 	return _IOC(iocRead, 'E', 0x06, uinputMaxNameSize)
 }
@@ -92,7 +92,7 @@ func EVIOCGPHYS() int {
 	return _IOC(iocRead, 'E', 0x07, maxPhysInfoSize)
 }
 
-//Syscall
+// Syscall
 func ioctl(fd uintptr, name int, data uintptr) error {
 	_, _, err := syscall.Syscall(syscall.SYS_IOCTL, fd, uintptr(name), data)
 	if err != 0 {
@@ -128,7 +128,7 @@ type InputEvent struct {
 
 //---------------------------------UInput--------------------------------------//
 
-//Ref: uinput.h
+// Ref: uinput.h
 const (
 	uinputMaxNameSize = 80
 	maxPhysInfoSize   = 80
@@ -144,7 +144,7 @@ type UinputUserDev struct {
 	AbsFlat    [absCnt]int32
 }
 
-//Ref: uinput.h
+// Ref: uinput.h
 func UISETEVBIT() int {
 	return _IOW('U', 100, 4) //sizeof(int)
 }
@@ -684,6 +684,50 @@ var friendly_name_2_keycode map[string]uint16 = map[string]uint16{
 	"BTN_FORWARD":          0x115,
 	"BTN_BACK":             0x116,
 	"BTN_TASK":             0x117,
+}
+
+var abs_type_friendly_mame map[uint16]string = map[uint16]string{
+	0x00: "AbsoluteX",
+	0x01: "AbsoluteY",
+	0x02: "AbsoluteZ",
+	0x03: "AbsoluteRX",
+	0x04: "AbsoluteRY",
+	0x05: "AbsoluteRZ",
+	0x06: "AbsoluteThrottle",
+	0x07: "AbsoluteRudder",
+	0x08: "AbsoluteWheel",
+	0x09: "AbsoluteGas",
+	0x0a: "AbsoluteBrake",
+	0x10: "AbsoluteHat0X",
+	0x11: "AbsoluteHat0Y",
+	0x12: "AbsoluteHat1X",
+	0x13: "AbsoluteHat1Y",
+	0x14: "AbsoluteHat2X",
+	0x15: "AbsoluteHat2Y",
+	0x16: "AbsoluteHat3X",
+	0x17: "AbsoluteHat3Y",
+	0x18: "AbsolutePressure",
+	0x19: "AbsoluteDistance",
+	0x1a: "AbsoluteTiltX",
+	0x1b: "AbsoluteTiltY",
+	0x1c: "AbsoluteToolWidth",
+	0x20: "AbsoluteVolume",
+	0x28: "AbsoluteMisc",
+	0x2f: "AbsoluteMTSlot",
+	0x30: "AbsoluteMTTouchMajor",
+	0x31: "AbsoluteMTTouchMinor",
+	0x32: "AbsoluteMTWidthMajor",
+	0x33: "AbsoluteMTWidthMinor",
+	0x34: "AbsoluteMTOrientation",
+	0x35: "AbsoluteMTPositionX",
+	0x36: "AbsoluteMTPositionY",
+	0x37: "AbsoluteMTToolType",
+	0x38: "AbsoluteMTBlobID",
+	0x39: "AbsoluteMTTrackingID",
+	0x3a: "AbsoluteMTPressure",
+	0x3b: "AbsoluteMTDistance",
+	0x3c: "AbsoluteMTToolX",
+	0x3d: "AbsoluteMTToolY",
 }
 
 func GetKeyName(keycode interface{}) string {

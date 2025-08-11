@@ -218,19 +218,8 @@ func check_dev_type(dev *evdev.Evdev) dev_type {
 			axis_count++
 		}
 	}
-	LS_RS := axis_count >= 4
-
-	key_count := 0
-	for i := evdev.BtnA; i <= evdev.BtnZ; i++ {
-		_, ok := key[i]
-		if ok {
-			key_count++
-		}
-	}
-	A_B_X_Y := key_count >= 4
-
-	if LS_RS && A_B_X_Y {
-		return type_joystick //手柄 检测LS,RS A,B,X,Y
+	if axis_count >= 4 { //检测有两个摇杆
+		return type_joystick
 	}
 	return type_unknown
 }
