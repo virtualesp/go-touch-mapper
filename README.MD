@@ -155,3 +155,7 @@ python remote_control.py
 在多显示器情况下使用```-i```指定displayID
 
 只可在adb shell下使用
+
+## ADB 下载
+
+[platform-tools-latest-windows](https://vip.123pan.cn/1833788059/23477218)
