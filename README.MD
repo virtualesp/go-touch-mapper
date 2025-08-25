@@ -23,12 +23,12 @@ androidX86 [go-touch-mapper_amd64](https://vip.123pan.cn/1833788059/direct/proje
 使用adb shell或者su shell运行
 
 ```
-cd /data/local/tmp
-#curl -LJo go-touch-mapper https://github.com/RiderLty/go-touch-mapper/releases/latest/download/go-touch-mapper_arm64
-curl -LJo go-touch-mapper https://vip.123pan.cn/1833788059/direct/projects/go-touch-mapper/build/go-touch-mapper_arm64
-chmod 777 ./go-touch-mapper
+cd /data/local/tmp && \ 
+curl -LJo go-touch-mapper https://vip.123pan.cn/1833788059/direct/projects/go-touch-mapper/build/go-touch-mapper_arm64 && \
+chmod 777 ./go-touch-mapper && \
 ./go-touch-mapper -h
 ```
+如果提示无curl，则需要手动下载后push到/data/local/tmp下运行
 
 ## Build & Run
 
