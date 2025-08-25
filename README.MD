@@ -136,10 +136,20 @@ joystickInfos文件夹下json文件为手柄配置文件
 ```
 
 ## 远程控制
+
+添加 -r 参数
+
 ```
 ./go-touch-mapper -r
 ```
+
 PC上 修改remote_control中sender("192.168.1.64:61069")为手机IP，端口默认可不修改
+
+或者下载[打包的exe](remote_control/dist/remote_control.exe)
+
+在同目录创建[addr.txt](remote_control/dist/addr.txt)，写入要控制设备的IP:端口
+
+
 
 运行
 
