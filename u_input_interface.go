@@ -67,7 +67,7 @@ func create_u_input_touch_screen(width int32, height int32) *os.File {
 	absMax[absMtPositionY] = height << touch_pos_scale //坐标系会自动以原点缩放
 	absMax[absMtTouchMajor] = 255
 	absMax[absMtWidthMajor] = 0
-	absMax[absMtSlot] = 255
+	absMax[absMtSlot] = 10
 	absMax[absMtTrackingId] = 65535
 
 	uiDev := UinputUserDev{
