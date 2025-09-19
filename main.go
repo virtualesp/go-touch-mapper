@@ -198,8 +198,7 @@ func check_dev_type(dev *evdev.Evdev) dev_type {
 	_, HWheel := rel[evdev.RelativeHWheel]
 	_, MouseLeft := key[evdev.BtnLeft]
 	_, MouseRight := key[evdev.BtnRight]
-	_, MouseMiddle := key[evdev.BtnMiddle]
-	if RelX && RelY && HWheel && MouseLeft && MouseRight && MouseMiddle {
+	if RelX && RelY && HWheel && MouseLeft && MouseRight {
 		return type_mouse //鼠标 检测XY 滚轮 左右中键
 	}
 	keyboard_keys := true
