@@ -8,7 +8,8 @@ from pygame.math import *
 
 DOWN = 0x1
 UP = 0x0
-DEV_NAME = "rm_kbm"
+DEV_NAME = "rkm"
+JS_DEV_NAME = "rjs"
 EV_SYN = 0x00
 EV_KEY = 0x01
 EV_REL = 0x02
@@ -19,6 +20,7 @@ REL_Y = 0x01
 REL_WHEEL = 0x08
 REL_HWHEEL = 0x06
 SYN_REPORT = 0x00
+
 
 scan2linux = {
     224: 29,
@@ -186,31 +188,33 @@ mousebtn = {
 }
 mousecodemap = [
     None,
-    mousebtn['BTN_LEFT'],
-    mousebtn['BTN_MIDDLE'],
-    mousebtn['BTN_RIGHT'],
+    mousebtn["BTN_LEFT"],
+    mousebtn["BTN_MIDDLE"],
+    mousebtn["BTN_RIGHT"],
     None,
     None,
-    mousebtn['BTN_SIDE'],
-    mousebtn['BTN_EXTRA'],
+    mousebtn["BTN_SIDE"],
+    mousebtn["BTN_EXTRA"],
 ]
 
-def pack_events(events,name):
-    buffer = (len(events)).to_bytes(1, 'little', signed=False)
-    for (type,code,value) in events:
-        buffer += struct.pack('<HHi', type, code, value)
+
+def pack_events(events, name):
+    buffer = (len(events)).to_bytes(1, "little", signed=False)
+    for type, code, value in events:
+        buffer += struct.pack("<HHi", type, code, value)
     buffer += name.encode()
     return buffer
+
 
 def unpack_events(buffer):
     print(buffer)
     length = buffer[0]
     events = [
-        struct.unpack('<HHi', buffer[i*8+1:i*8+9])
-        for i in range(length)
+        struct.unpack("<HHi", buffer[i * 8 + 1 : i * 8 + 9]) for i in range(length)
     ]
-    name = buffer[length*8+1:].decode()
+    name = buffer[length * 8 + 1 :].decode()
     return events, name
+
 
 class sender:
     def __init__(self, addr) -> None:
@@ -222,7 +226,10 @@ class sender:
 
     def sendKey(self, scancode, downup):
         if scan2linux[scancode] != None:
-            self.udpSocket.sendto(pack_events([[EV_KEY, scan2linux[scancode], downup]], DEV_NAME), self.sendArr)
+            self.udpSocket.sendto(
+                pack_events([[EV_KEY, scan2linux[scancode], downup]], DEV_NAME),
+                self.sendArr,
+            )
 
     def sendMouseMove(self, x=None, y=None):
         events = []
@@ -234,25 +241,60 @@ class sender:
 
     def sendMouseBTN(self, btn, downup):
         if btn <= 7 and mousecodemap[btn] != None:
-            self.udpSocket.sendto(pack_events(
-                [[EV_KEY, mousecodemap[btn], downup]], DEV_NAME), self.sendArr)
+            self.udpSocket.sendto(
+                pack_events([[EV_KEY, mousecodemap[btn], downup]], DEV_NAME),
+                self.sendArr,
+            )
 
     def sendWheel(self, value):
-        self.udpSocket.sendto(pack_events(
-            [[EV_REL, REL_WHEEL, value]], DEV_NAME), self.sendArr)
+        self.udpSocket.sendto(
+            pack_events([[EV_REL, REL_WHEEL, value]], DEV_NAME), self.sendArr
+        )
+
+    def sendJSBTN(self, code, updown):
+        self.udpSocket.sendto(
+            pack_events([[EV_KEY, code, updown]], JS_DEV_NAME), self.sendArr
+        )
+
+    def sendABS(self, axis, value):
+        print("send ABS:", axis, value)
+        self.udpSocket.sendto(
+            pack_events([[EV_ABS, axis, value]], JS_DEV_NAME), self.sendArr
+        )
 
 
 if __name__ == "__main__":
-    addr = "192.168.1.64:61069"
+    addr = "192.168.3.64:61069"
     if os.path.exists("./addr.txt"):
         with open("./addr.txt", "r") as f:
             addr = f.read()
-
     senderInstance = sender(addr)
     pygame.init()
     screen = pygame.display.set_mode((320, 240), 0, 32)
     pygame.mouse.set_visible(False)
     pygame.event.set_grab(True)
+    pygame.joystick.init()
+    joysticks = []
+    axis_last = []
+    # 检测并初始化所有连接的手柄
+    for i in range(pygame.joystick.get_count()):
+        js = pygame.joystick.Joystick(i)
+        js.init()
+        joysticks.append(js)
+        print(f"检测到游戏手柄: {js.get_name()}")
+        axis_last.append({ 
+        0: 0,
+        1: 0,
+        2: 0,
+        3: 0,
+        4: -32766,
+        5: -32766,
+        6: 0,
+        7: 0,
+    })  # X轴
+
+    # 手柄配置参数
+    STICK_DEADZONE = 0.1  # 摇杆死区阈值
     flag = True
     while flag:
         for event in pygame.event.get():
@@ -273,6 +315,41 @@ if __name__ == "__main__":
             elif event.type == pygame.MOUSEMOTION:
                 rel = pygame.mouse.get_rel()
                 senderInstance.sendMouseMove(
-                    x=rel[0] if rel[0] != 0 else None, y=rel[1] if rel[1] != 0 else None)
+                    x=rel[0] if rel[0] != 0 else None, y=rel[1] if rel[1] != 0 else None
+                )
             elif event.type == pygame.MOUSEWHEEL:
                 senderInstance.sendWheel(event.y)
+            elif event.type == pygame.JOYAXISMOTION:
+                if event.axis < 4 :  # 摇杆
+                    value = event.value
+                    if abs(value) < STICK_DEADZONE:
+                        report = 0  # 应用死区
+                    else:
+                        report = int(value * 32766) 
+                    if axis_last[event.joy][event.axis] == report:
+                        continue
+                    else:
+                        axis_last[event.joy][event.axis] = report
+                        senderInstance.sendABS(event.axis, report)
+                elif event.axis == 4 or event.axis == 5:  # 扳机
+                    report = int(event.value * 1023) 
+                    if axis_last[event.joy][event.axis] == report:
+                        continue
+                    else:
+                        axis_last[event.joy][event.axis] = report
+                        senderInstance.sendABS(event.axis, report)
+
+            elif event.type == pygame.JOYBUTTONDOWN:
+                senderInstance.sendJSBTN(event.button, DOWN)
+
+            elif event.type == pygame.JOYBUTTONUP:
+                senderInstance.sendJSBTN(event.button, UP)
+
+            elif event.type == pygame.JOYHATMOTION:
+                x, y = event.value[0], -event.value[1]
+                if axis_last[event.joy][6] != x:
+                    senderInstance.sendABS(6, x)
+                if axis_last[event.joy][7] != y:
+                    senderInstance.sendABS(7, y)
+                axis_last[event.joy][6] = x
+                axis_last[event.joy][7] = y
