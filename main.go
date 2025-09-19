@@ -110,7 +110,9 @@ func udp_event_injector(ch chan *event_pack, port int) {
 		select {
 		case <-global_close_signal:
 			return
-		case pack := <-recv_ch:
+		case pack := <-recv_ch: //数据包格式：<event_count:1byte><event1:8byte><event2:8byte>...<eventN:8byte><dev_name:N byte>
+			//每个event格式：<type:2byte><code:2byte><value:4byte>
+			//共8byte
 			// logger.Debugf("%v", pack)
 			event_count := int(pack[0])
 			events := make([]*evdev.Event, 0)
