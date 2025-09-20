@@ -25,6 +25,7 @@ import (
 type event_pack struct {
 	//表示一个动作 由一系列event组成
 	dev_name string
+	dev_type dev_type
 	events   []*evdev.Event
 }
 
@@ -72,6 +73,7 @@ func dev_reader(event_reader chan *event_pack, index int) {
 			} else if event.Type == evdev.SyncReport {
 				pack := &event_pack{
 					dev_name: dev_name,
+					dev_type: check_dev_type(d),
 					events:   events,
 				}
 				event_reader <- pack
@@ -110,7 +112,7 @@ func udp_event_injector(ch chan *event_pack, port int) {
 		select {
 		case <-global_close_signal:
 			return
-		case pack := <-recv_ch: //数据包格式：<event_count:1byte><event1:8byte><event2:8byte>...<eventN:8byte><dev_name:N byte>
+		case pack := <-recv_ch: //数据包格式：<event_count:1byte><event1:8byte><event2:8byte>...<eventN:8byte><dev_type:1byte><dev_name:N byte>
 			//每个event格式：<type:2byte><code:2byte><value:4byte>
 			//共8byte
 			// logger.Debugf("%v", pack)
@@ -126,7 +128,8 @@ func udp_event_injector(ch chan *event_pack, port int) {
 				events = append(events, event)
 			}
 			e_pack := &event_pack{
-				dev_name: string(pack[event_count*8+1:]),
+				dev_name: string(pack[event_count*8+2:]),
+				dev_type: dev_type(pack[event_count*8+1]),
 				events:   events,
 			}
 			ch <- e_pack

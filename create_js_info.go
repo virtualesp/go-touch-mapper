@@ -33,6 +33,7 @@ func create_no_block_ch(dev *evdev.Evdev) chan *event_pack {
 			if event.Type == evdev.SyncReport {
 				pack := &event_pack{
 					dev_name: "ignore",
+					dev_type: type_joystick,
 					events:   events,
 				}
 				select {
