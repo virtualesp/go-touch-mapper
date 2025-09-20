@@ -894,8 +894,8 @@ func (self *TouchHandler) handel_key_up_down(key_name string, up_down int32, dev
 
 }
 
-func (self *TouchHandler) handel_key_events(events []*evdev.Event, dev_name string) {
-	if jsconfig, ok := self.joystickInfo[dev_name]; ok {
+func (self *TouchHandler) handel_key_events(events []*evdev.Event, dev_type dev_type, dev_name string) {
+	if jsconfig, ok := self.joystickInfo[dev_name]; ok && dev_type == type_joystick {
 		for _, event := range events {
 			if key_name, ok := jsconfig.Get("BTN").CheckGet(strconv.Itoa(int(event.Code))); ok {
 				self.handel_key_up_down(key_name.MustString(), event.Value, dev_name)
@@ -927,10 +927,9 @@ func (self *TouchHandler) getStick(stick_name string) (float64, float64) {
 	}
 }
 
-func (self *TouchHandler) handel_abs_events(events []*evdev.Event, dev_name string) {
+func (self *TouchHandler) handel_abs_events(events []*evdev.Event, dev_type dev_type, dev_name string) {
 	for _, event := range events {
-
-		if jsconfig, ok := self.joystickInfo[dev_name]; ok {
+		if jsconfig, ok := self.joystickInfo[dev_name]; ok && dev_type == type_joystick {
 			abs_info := jsconfig.Get("ABS").Get(strconv.Itoa(int(event.Code)))
 			name := abs_info.Get("name").MustString("")
 			abs_mini := int32(abs_info.Get("range").GetIndex(0).MustInt())
@@ -1111,11 +1110,11 @@ func (self *TouchHandler) handel_event() {
 			rel_sin := time.Since(perfPoint)
 
 			perfPoint = time.Now()
-			self.handel_key_events(key_events, event_pack.dev_name)
+			self.handel_key_events(key_events, event_pack.dev_type, event_pack.dev_name)
 			key_sin := time.Since(perfPoint)
 
 			perfPoint = time.Now()
-			self.handel_abs_events(abs_events, event_pack.dev_name)
+			self.handel_abs_events(abs_events, event_pack.dev_type, event_pack.dev_name)
 			abs_sin := time.Since(perfPoint)
 
 			// logger.Debugf("event pack:%v", event_pack)
