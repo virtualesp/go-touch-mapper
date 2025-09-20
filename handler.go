@@ -139,6 +139,117 @@ func InitTouchHandler(
 	config_json, _ := simplejson.NewJson(content)
 
 	joystickInfo := make(map[string]*simplejson.Json)
+	//插入远程遥控的手柄信息
+	rjsJson := []byte(`{
+    "DEADZONE": {
+        "LS": [
+            0.05,
+            0.05
+        ],
+        "RS": [
+            0.05,
+            0.05
+        ]
+    },
+    "ABS": {
+        "7": {
+            "name": "HAT0Y",
+            "range": [
+                -1,
+                1
+            ],
+            "reverse": false
+        },
+        "6": {
+            "name": "HAT0X",
+            "range": [
+                -1,
+                1
+            ],
+            "reverse": false
+        },
+        "0": {
+            "name": "LS_X",
+            "range": [
+                -32767,
+                32767
+            ],
+            "reverse": false
+        },
+        "1": {
+            "name": "LS_Y",
+            "range": [
+                -32767,
+                32767
+            ],
+            "reverse": false
+        },
+		"2": {
+            "name": "RS_X",
+            "range": [
+                -32767,
+                32767
+            ],
+            "reverse": false
+        },
+        "3": {
+            "name": "RS_Y",
+            "range": [
+                -32767,
+				32767
+            ],
+            "reverse": false
+        },
+        "4": {
+            "name": "LT",
+            "range": [
+                -1023,
+                1023
+            ],
+            "reverse": false
+        },
+        "5": {
+            "name": "RT",
+            "range": [
+                -1023,
+                1023
+            ],
+            "reverse": false
+        }
+        
+    },
+    "BTN": {
+        "0": "BTN_A",
+        "1": "BTN_B",
+        "2": "BTN_X",
+        "3": "BTN_Y",
+        "8": "BTN_LS",
+        "9": "BTN_RS",
+        "4": "BTN_LB",
+        "5": "BTN_RB",
+        "6": "BTN_SELECT",
+        "7": "BTN_START",
+        "10": "BTN_HOME"
+    },
+    "MAP_KEYBOARD": {
+        "BTN_LT": "BTN_RIGHT",
+        "BTN_RT": "BTN_LEFT",
+        "BTN_DPAD_UP": "KEY_UP",
+        "BTN_DPAD_LEFT": "KEY_LEFT",
+        "BTN_DPAD_RIGHT": "KEY_RIGHT",
+        "BTN_DPAD_DOWN": "KEY_DOWN",
+        "BTN_A": "KEY_ENTER",
+        "BTN_B": "KEY_BACK",
+        "BTN_SELECT": "KEY_COMPOSE",
+        "BTN_THUMBL": "KEY_HOME"
+    }
+}`)
+	rjsJsonObj, err := simplejson.NewJson(rjsJson)
+	if err != nil {
+		logger.Errorf("Failed to parse rjs joystick config: %v", err)
+		os.Exit(1)
+	}
+	joystickInfo["rjs"] = rjsJsonObj
 	//check if dir ./joystickInfos exists
 	path, _ := exec.LookPath(os.Args[0])
 	abs, _ := filepath.Abs(path)
