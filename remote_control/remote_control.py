@@ -197,23 +197,30 @@ mousecodemap = [
     mousebtn["BTN_EXTRA"],
 ]
 
+TYPE_MOUSE = 0x00.to_bytes(1, "little", signed=False)
+TYPE_KEYBOARD = 0x01.to_bytes(1, "little", signed=False)
+TYPE_JOYSTICK = 0x02.to_bytes(1, "little", signed=False)
+TYPE_TOUCH = 0x03.to_bytes(1, "little", signed=False)
+TYPE_UNKNOWN = 0x04.to_bytes(1, "little", signed=False)
 
-def pack_events(events, name):
+
+def pack_events(events, dev_type, name):
     buffer = (len(events)).to_bytes(1, "little", signed=False)
     for type, code, value in events:
         buffer += struct.pack("<HHi", type, code, value)
+    buffer += dev_type
     buffer += name.encode()
     return buffer
 
 
-def unpack_events(buffer):
-    print(buffer)
-    length = buffer[0]
-    events = [
-        struct.unpack("<HHi", buffer[i * 8 + 1 : i * 8 + 9]) for i in range(length)
-    ]
-    name = buffer[length * 8 + 1 :].decode()
-    return events, name
+# def unpack_events(buffer):
+#     print(buffer)
+#     length = buffer[0]
+#     events = [
+#         struct.unpack("<HHi", buffer[i * 8 + 1 : i * 8 + 9]) for i in range(length)
+#     ]
+#     name = buffer[length * 8 + 1 :].decode()
+#     return events, name
 
 
 class sender:
@@ -227,7 +234,9 @@ class sender:
     def sendKey(self, scancode, downup):
         if scan2linux[scancode] != None:
             self.udpSocket.sendto(
-                pack_events([[EV_KEY, scan2linux[scancode], downup]], DEV_NAME),
+                pack_events(
+                    [[EV_KEY, scan2linux[scancode], downup]], TYPE_KEYBOARD, DEV_NAME
+                ),
                 self.sendArr,
             )
 
@@ -237,29 +246,32 @@ class sender:
             events.append((EV_REL, REL_X, x))
         if y != None:
             events.append((EV_REL, REL_Y, y))
-        self.udpSocket.sendto(pack_events(events, DEV_NAME), self.sendArr)
+        self.udpSocket.sendto(pack_events(events, TYPE_MOUSE, DEV_NAME), self.sendArr)
 
     def sendMouseBTN(self, btn, downup):
         if btn <= 7 and mousecodemap[btn] != None:
             self.udpSocket.sendto(
-                pack_events([[EV_KEY, mousecodemap[btn], downup]], DEV_NAME),
+                pack_events(
+                    [[EV_KEY, mousecodemap[btn], downup]], TYPE_MOUSE, DEV_NAME
+                ),
                 self.sendArr,
             )
 
     def sendWheel(self, value):
         self.udpSocket.sendto(
-            pack_events([[EV_REL, REL_WHEEL, value]], DEV_NAME), self.sendArr
+            pack_events([[EV_REL, REL_WHEEL, value]], TYPE_MOUSE, DEV_NAME),
+            self.sendArr,
         )
 
     def sendJSBTN(self, code, updown):
         self.udpSocket.sendto(
-            pack_events([[EV_KEY, code, updown]], JS_DEV_NAME), self.sendArr
+            pack_events([[EV_KEY, code, updown]], TYPE_JOYSTICK, JS_DEV_NAME), self.sendArr
         )
 
     def sendABS(self, axis, value):
-        print("send ABS:", axis, value)
+        # print("send ABS:", axis, value)
         self.udpSocket.sendto(
-            pack_events([[EV_ABS, axis, value]], JS_DEV_NAME), self.sendArr
+            pack_events([[EV_ABS, axis, value]], TYPE_JOYSTICK, JS_DEV_NAME), self.sendArr
         )
 
 
@@ -282,16 +294,18 @@ if __name__ == "__main__":
         js.init()
         joysticks.append(js)
         print(f"检测到游戏手柄: {js.get_name()}")
-        axis_last.append({ 
-        0: 0,
-        1: 0,
-        2: 0,
-        3: 0,
-        4: -32766,
-        5: -32766,
-        6: 0,
-        7: 0,
-    })  # X轴
+        axis_last.append(
+            {
+                0: 0,
+                1: 0,
+                2: 0,
+                3: 0,
+                4: -32766,
+                5: -32766,
+                6: 0,
+                7: 0,
+            }
+        )  # X轴
 
     # 手柄配置参数
     STICK_DEADZONE = 0.1  # 摇杆死区阈值
@@ -320,19 +334,19 @@ if __name__ == "__main__":
             elif event.type == pygame.MOUSEWHEEL:
                 senderInstance.sendWheel(event.y)
             elif event.type == pygame.JOYAXISMOTION:
-                if event.axis < 4 :  # 摇杆
+                if event.axis < 4:  # 摇杆
                     value = event.value
                     if abs(value) < STICK_DEADZONE:
                         report = 0  # 应用死区
                     else:
-                        report = int(value * 32766) 
+                        report = int(value * 32766)
                     if axis_last[event.joy][event.axis] == report:
                         continue
                     else:
                         axis_last[event.joy][event.axis] = report
                         senderInstance.sendABS(event.axis, report)
                 elif event.axis == 4 or event.axis == 5:  # 扳机
-                    report = int(event.value * 1023) 
+                    report = int(event.value * 1023)
                     if axis_last[event.joy][event.axis] == report:
                         continue
                     else:
