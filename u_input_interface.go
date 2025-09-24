@@ -280,7 +280,7 @@ func makeEventsMMap(size int) EventMap {
 	return EventMap{data: byteSlice, Events: eventSlice}
 }
 
-func handel_touch_using_vTouch() touch_control_func {
+func handel_touch_using_uinput_touch() touch_control_func {
 	// sizeofEvent := int(unsafe.Sizeof(evdev.Event{}))
 	// sendEvents := func(fd *os.File, events []*evdev.Event) {
 	// 	buf := make([]byte, sizeofEvent*len(events))

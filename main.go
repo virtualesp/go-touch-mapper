@@ -20,6 +20,7 @@ import (
 
 	"github.com/akamensky/argparse"
 	"github.com/kenshaw/evdev"
+	"go.bug.st/serial"
 )
 
 type event_pack struct {
@@ -381,7 +382,18 @@ func get_MT_size(indexes map[int]bool) (int32, int32) { //获取MTPositionX和MT
 	return int32(1), int32(1)
 }
 
-func auto_detect_and_read(event_chan chan *event_pack) {
+func OpenSerialWritePipe(portName string, baudRate int) (serial.Port, error) {
+	mode := &serial.Mode{
+		BaudRate: baudRate,
+	}
+	port, err := serial.Open(portName, mode)
+	if err != nil {
+		return nil, err
+	}
+	return port, nil
+}
+
+func auto_detect_and_read(event_chan chan *event_pack, patern string) {
 	//自动检测设备并读取 循环检测 自动管理设备插入移除
 	devices := make(map[int]bool)
 	for {
@@ -402,6 +414,11 @@ func auto_detect_and_read(event_chan chan *event_pack) {
 				if devName == "go-touch-mapper-virtual-device" {
 					continue //跳过生成的虚拟设备
 				}
+				re := regexp.MustCompile(patern)
+				if !re.MatchString(devName) {
+					// logger.Debugf("设备名称 %s 不匹配 %s", devName, patern)
+					continue
+				}
 				if devType == type_mouse || devType == type_keyboard || devType == type_joystick {
 					logger.Infof("检测到设备 %s(/dev/input/event%d) : %s", devName, index, devTypeFriendlyName[devType])
 					localIndex := index
@@ -415,6 +432,31 @@ func auto_detect_and_read(event_chan chan *event_pack) {
 			time.Sleep(time.Duration(400) * time.Millisecond)
 		}
 	}
+}
+
+func parseHIDTouchScreen(s string) (x, y uint32, r int, err error) {
+	parts := strings.Split(s, "x")
+	if len(parts) != 3 {
+		return 0, 0, 0, fmt.Errorf("invalid format: expected 3 parts separated by 'x', got %d", len(parts))
+	}
+	x64, err := strconv.ParseUint(parts[0], 10, 32)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("invalid x value: %v", err)
+	}
+	x = uint32(x64)
+	y64, err := strconv.ParseUint(parts[1], 10, 32)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("invalid y value: %v", err)
+	}
+	y = uint32(y64)
+	r, err = strconv.Atoi(parts[2])
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("invalid r value: %v", err)
+	}
+	if r < 0 || r > 3 {
+		return 0, 0, 0, fmt.Errorf("r value must be 0, 1, 2, or 3, got %d", r)
+	}
+	return x, y, r, nil
 }
 
 func fileExists(filename string) bool {
@@ -439,6 +481,12 @@ func main() {
 		Help:     "创建手柄配置文件模式",
 	})
 
+	var patern *string = parser.String("", "pattern", &argparse.Options{
+		Required: false,
+		Default:  ".*",
+		Help:     "用于筛选设备名称的正则",
+	})
+
 	var mixTouchDisabled *bool = parser.Flag("t", "touch-disabled", &argparse.Options{
 		Required: false,
 		Help:     "关闭触屏混合",
@@ -448,7 +496,19 @@ func main() {
 	var usingInputManagerID *int = parser.Int("i", "inputManager", &argparse.Options{
 		Required: false,
 		Default:  -1,
-		Help:     "使用inputManager控制触摸 适配多显示器 指定DisplayID",
+		Help:     "DisplayID 使用inputManager控制触摸，可用于控制外接显示器 ",
+	})
+
+	var usingHIDTouchTtyPath *string = parser.String("", "tty-path", &argparse.Options{
+		Required: false,
+		Default:  "",
+		Help:     "串口设备路径 将使用串口控制外接的HID设备模拟触屏",
+	})
+
+	var usingHIDTouchScreen *string = parser.String("", "tty-screen", &argparse.Options{
+		Required: false,
+		Default:  "1440x3440x1",
+		Help:     "使用串口控制HID设备模拟触屏的屏幕参数，宽x高x旋转方向，例如1440x3440x1",
 	})
 
 	var using_remote_control *bool = parser.Flag("r", "remoteControl", &argparse.Options{
@@ -492,6 +552,18 @@ func main() {
 		fmt.Print(parser.Usage(err))
 		os.Exit(1)
 	}
+
+	if *usingInputManagerID != -1 && *usingHIDTouchTtyPath != "" {
+		logger.Error("无法同时使用inputManager与HID")
+		os.Exit(2)
+	}
+
+	hid_x, hid_y, hid_r, err := parseHIDTouchScreen(*usingHIDTouchScreen)
+	if err != nil {
+		logger.Error("解析失败: %v\n", err)
+		return
+	}
+
 	if *debug_mode {
 		logger.WithDebug()
 		logger.Debug("debug on")
@@ -577,24 +649,38 @@ func main() {
 			}
 		}
 
-		go auto_detect_and_read(events_ch)
-
-		go listen_device_orientation()
+		go auto_detect_and_read(events_ch, *patern)
 
 		go handel_u_input_mouse_keyboard(fileted_u_input_control_ch)
 
 		var touch_control_func touch_control_func
-		if *usingInputManagerID != -1 {
+
+		if *usingHIDTouchTtyPath != "" {
+			logger.Info("触屏控制将使用串口控制外接的HID设备处理")
+			logger.Infof("串口路径：%s", *usingHIDTouchTtyPath)
+			logger.Infof("HID触屏尺寸：%dx%d", hid_x, hid_y)
+			logger.Infof("HID触屏方向：%d", hid_r)
+
+			port, err := OpenSerialWritePipe(*usingHIDTouchTtyPath, 2000000)
+			if err != nil {
+				logger.Errorf("无法打开串口: %v", err)
+				return
+			}
+			touch_control_func = handel_touch_using_hid_manager(port, hid_x, hid_y, hid_r)
+			touch_control_func(touch_control_pack{
+				action: 0x03,
+				id:     0,
+				x:      int32(hid_x),
+				y:      int32(hid_y),
+			})
+
+		} else if *usingInputManagerID != -1 {
 			logger.Info("触屏控制将使用inputManager处理")
+			go listen_device_orientation()
 			touch_control_func = handel_touch_using_input_manager(*usingInputManagerID)
 		} else {
-			touch_control_func = handel_touch_using_vTouch()
-			// for index, devType := range get_possible_device_indexes(make(map[int]bool)) {
-			// 	if devType == type_touch {
-			// 		touch_control_func = handel_touch_using_vTouch(index)
-			// 		break
-			// 	}
-			// }
+			touch_control_func = handel_touch_using_uinput_touch()
+			go listen_device_orientation()
 		}
 
 		map_switch_signal := make(chan bool) //通知虚拟鼠标当前为鼠标还是映射模式
@@ -607,8 +693,9 @@ func main() {
 			map_switch_signal,
 			*measure_sensitivity_mode,
 		)
-
-		go touchHandler.mix_touch(touch_event_ch, max_mt_x, max_mt_y)
+		if *usingHIDTouchTtyPath == "" {
+			go touchHandler.mix_touch(touch_event_ch, max_mt_x, max_mt_y)
+		}
 		go touchHandler.auto_handel_view_release(*view_release_timeout)
 		go touchHandler.loop_handel_wasd_wheel()
 		go touchHandler.loop_handel_rs_move()
