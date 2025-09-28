@@ -668,10 +668,12 @@ func main() {
 			}
 			touch_control_func = handel_touch_using_hid_manager(port, hid_x, hid_y, hid_r)
 			touch_control_func(touch_control_pack{
-				action: 0x03,
-				id:     0,
-				x:      int32(hid_x),
-				y:      int32(hid_y),
+				action:   TouchActionResetResolution,
+				id:       0,
+				x:        int32(hid_x),
+				y:        int32(hid_y),
+				screen_x: int32(hid_x),
+				screen_y: int32(hid_y),
 			})
 
 		} else if *usingInputManagerID != -1 {

@@ -74,6 +74,10 @@ const (
 )
 
 const (
+	TouchActionResetResolution int8 = 3
+)
+
+const (
 	UInput_mouse_move  int8 = 0
 	UInput_mouse_btn   int8 = 1
 	UInput_mouse_wheel int8 = 2

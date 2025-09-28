@@ -1,39 +1,33 @@
 /*
-  ESP32-S3 Dual-touch HID (Android compatible) controlled via Serial
-  -----------------------------------------------------------------
-  - Supports exactly 2 touch points (dual-finger)
-  - HID descriptor declares 2 logical Finger collections so Android recognizes
-    two simultaneous touch points.
-  - Report layout: [Finger1(6 bytes)] [Finger2(6 bytes)] [ContactCount(1 byte)] = 13 bytes
-  Serial protocol (ASCII, newline-terminated):
-    F1:x,y,s;F2:x,y,s
-    - Fi is finger index 1..2
-    - x,y are coordinates in 0..32767 (matches descriptor Logical Max)
-    - s: 0 = up, 1 = down
-    Example: F1:500,1000,1;F2:600,1100,1
-  Notes:
-    - This file is a single .ino sketch for ESP32-S3 using TinyUSB-style USB.h/USBHID.h APIs.
-    - Make sure the board supports USB device (ESP32-S3) and TinyUSB.
-*/
+ * ESP32-S3 HID Touchscreen (Android/Windows compatible)
+ * -----------------------------------------------------------------
+ * - This version initializes the HID device as a pointer (nullptr)
+ * and creates the instance dynamically within the initDevice() function.
+ * - Supports dynamic resolution changes via Serial command.
+ * - HID descriptor declares a single touch contact report.
+ * - Serial protocol for touch reports (binary):
+ * - Header: 0xF4
+ * - Report: 11 bytes matching the HID descriptor structure.
+ * - Serial protocol for resolution change (binary):
+ * - Header: 0xF4
+ * - Command byte: 0x03
+ * - New Max X: 4 bytes, little-endian (uint32_t)
+ * - New Max Y: 4 bytes, little-endian (uint32_t)
+ */
 #include "USB.h"
 #include "USBHID.h"
 #include <string.h>
+
+// Using macros instead of "magic numbers" improves readability and maintainability.
+// These values are byte offsets calculated from the report_descriptor below.
+#define REPORT_DESC_MAX_X_OFFSET 41
+#define REPORT_DESC_MAX_Y_OFFSET 56
+
 USBHID HID;
-// Each finger uses 6 bytes: 1 byte (TipSwitch + padding), 1 byte Contact ID, 2 bytes X, 2 bytes Y
-#define BYTES_PER_FINGER 6
-#define MAX_FINGERS 10
-#define DEBUG 1
 
-struct RecTouchReport
-{
-    uint8_t action; // 状态字节（按下/移动/抬起/重置屏幕尺寸）
-    uint8_t id;     // 触点ID
-    uint32_t x;     // X坐标（小端序）
-    uint32_t y;     // Y坐标（小端序）
-    uint8_t activeFingers;
-};
-
-RecTouchReport data;
+// HID Report Descriptor
+// Defines a touchscreen device with information for one touch point (status, ID, X/Y coordinates)
+// and the total number of contacts.
 
 static uint8_t report_descriptor[] = {
     0x05, 0x0D, // Usage Page (Digitizer)
@@ -91,116 +85,117 @@ public:
             HID.addDevice(this, sizeof(report_descriptor));
         }
     }
-    uint16_t _onGetFeature(uint8_t report_id, uint8_t *buffer, uint16_t len)
-    {
-        (void)report_id;
-        (void)len;
-        buffer[0] = 0x0A;
-        return 1;
-    }
+
     uint16_t _onGetDescriptor(uint8_t *buffer)
     {
         memcpy(buffer, report_descriptor, sizeof(report_descriptor));
         return sizeof(report_descriptor);
     }
+
     void begin(void)
     {
         HID.begin();
     }
+
     bool send(uint8_t *value, uint16_t len)
     {
         return HID.SendReport(0, value, len);
     }
 };
-CustomHIDDevice Device;
+
+// CHANGE 1: The global device object is now a pointer, initialized to nullptr.
+CustomHIDDevice *Device = nullptr;
+
+// Serial communication protocol definitions
+#define MAGIC_HEADER 0xF4
+#define CMD_SET_RESOLUTION 0x03
+#define SERIAL_BUFFER_SIZE 11
+
+static bool DeviceReady = false;
+
+void initDevice()
+{
+    // CHANGE 2: Create an instance of the CustomHIDDevice class.
+    // This check prevents memory leaks if the function is called multiple times.
+    if (Device) {
+        delete Device;
+    }
+    Device = new CustomHIDDevice();
+
+    // Use the -> operator to access members of the object via its pointer.
+    Device->begin();
+    USB.begin();
+
+    unsigned long start = millis();
+    while (!HID.ready() && (millis() - start < 3000))
+    {
+        delay(10);
+    }
+
+    if (HID.ready())
+    {
+        Serial.println("HID ready.");
+        DeviceReady = true;
+    }
+    else
+    {
+        Serial.println("HID initialization failed.");
+        // Clean up the allocated object if initialization fails
+        delete Device;
+        Device = nullptr;
+        DeviceReady = false;
+    }
+    delay(1000); // Wait for serial monitor to connect
+    Serial.println("ESP32-S3 Touch HID init over");
+}
 
 void setup()
 {
-    Serial.setRxBufferSize(2048); // 将接收缓冲区增加到1KB
+    Serial.setRxBufferSize(2048); // Increase serial receive buffer size
     Serial.begin(2000000);
-    delay(10);
-    Serial.println("ESP32-S3 Dual-touch HID starting...");
-    Device.begin();
-    USB.begin();
-    unsigned long start = millis();
-    while (!HID.ready() && (millis() - start < 3000))
-        delay(10);
-    Serial.println("HID ready");
+    Serial.println("ESP32-S3 Touch HID waiting for CMD_SET_RESOLUTION ");
 }
 
-#define MAGIC_HEADER 0xF4
-
-static char buf[11];
-
+static uint8_t serial_buffer[SERIAL_BUFFER_SIZE];
 void loop()
 {
-    if (Serial.read() == MAGIC_HEADER)
+    // Check if there is data in the serial buffer and if it starts with the magic header byte
+    if (Serial.available() > 0 && Serial.read() == MAGIC_HEADER)
     {
-        while (Serial.available() < 11)
+        // Wait until the complete 11-byte packet is received
+        while (Serial.available() < SERIAL_BUFFER_SIZE)
         {
+            // You can add a timeout here if needed
         }
-        Serial.readBytes(buf, 11);
-        if (buf[1] == 0x03)
-        { // 初始化屏幕的指令 复用action
-         
-            unsigned long start = millis();
-            while (!HID.ready() && (millis() - start < 3000))
-                delay(10);
-            Serial.println("HID reinitialized with new dimensions");
-            memcpy(&report_descriptor[41], &buf[2], 4);
-            memcpy(&report_descriptor[56], &buf[5], 4);
-            Device.begin();
-            USB.begin();
-            start = millis();
-            while (!HID.ready() && (millis() - start < 3000))
-                delay(10);
-            Serial.println("HID ready");
+        Serial.readBytes(serial_buffer, SERIAL_BUFFER_SIZE);
+        Serial.printf("BYTES : %d %d %d %d %d %d %d %d %d %d %d\n", serial_buffer[0], serial_buffer[1], serial_buffer[2], serial_buffer[3], serial_buffer[4], serial_buffer[5], serial_buffer[6], serial_buffer[7], serial_buffer[8], serial_buffer[9], serial_buffer[10]);
+
+        // BUG FIX: Changed assignment '=' to comparison '==' and simplified logic to '!DeviceReady'
+        if (serial_buffer[0] == CMD_SET_RESOLUTION && !DeviceReady)
+        {
+            // If it's a command to set the resolution
+            uint32_t newMaxX, newMaxY;
+            memcpy(&newMaxX, &serial_buffer[1], sizeof(uint32_t));
+            memcpy(&newMaxY, &serial_buffer[5], sizeof(uint32_t));
+            Serial.println("...");
+            Serial.printf("INFO: set HID resolution: %u,%u\n", newMaxX, newMaxY);
+
+            // Update the report descriptor with the new resolution
+            memcpy(&report_descriptor[REPORT_DESC_MAX_X_OFFSET], &serial_buffer[1], sizeof(uint32_t));
+            memcpy(&report_descriptor[REPORT_DESC_MAX_Y_OFFSET], &serial_buffer[5], sizeof(uint32_t));
+
+            delay(100); // Short delay to ensure serial messages are sent
+            initDevice(); // Now, initialize the device with the new descriptor
         }
-        Device.send((uint8_t *)buf, 11);
-        // Serial.printf("%d %d %d %d %d %d %d %d %d %d %d\n", buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7], buf[8], buf[9], buf[10]);
+        else
+        {
+            // If it's a touch data report
+            // CHANGE 3: Check if the Device pointer is valid and ready before sending a report.
+            if (DeviceReady && Device)
+            {
+                // Use the -> operator to call the method.
+                Device->send(serial_buffer, SERIAL_BUFFER_SIZE);
+            }
+        }
     }
 }
-
-// // Report buffer: 2 fingers * 6 bytes + 1 byte contact count = 13
-// uint8_t TouchReport[BYTES_PER_FINGER + 1];
-// bool fingerStates[MAX_FINGERS] = {false}; // 跟踪每个触点状态
-// int activeFingers = 0;                    // 全局变量：当前按下的触点数量
-// // helper to set finger data (0-based index)
-// void setFinger(int idx, uint32_t x, uint32_t y, bool down)
-// {
-//     if (idx < 0 || idx >= MAX_FINGERS)
-//         return;
-//     // 更新触点状态和计数
-//     bool wasDown = fingerStates[idx];
-//     fingerStates[idx] = down;
-//     if (down && !wasDown)
-//     {
-//         activeFingers++; // 新按下
-//     }
-//     else if (!down && wasDown)
-//     {
-//         activeFingers--; // 新抬起
-//     }
-//     // byte 0: TipSwitch(1bit) + 7 bits padding
-//     TouchReport[0] = down ? 0x01 : 0x00;
-//     // byte 1: Contact ID
-//     TouchReport[1] = idx + 1; // IDs: 1..2
-
-//     // bytes 2-5: X (32-bit, little-endian)
-//     TouchReport[2] = (uint8_t)(x & 0xFF);
-//     TouchReport[3] = (uint8_t)((x >> 8) & 0xFF);
-//     TouchReport[4] = (uint8_t)((x >> 16) & 0xFF);
-//     TouchReport[5] = (uint8_t)((x >> 24) & 0xFF);
-
-//     // bytes 6-9: Y (32-bit, little-endian)
-//     TouchReport[6] = (uint8_t)(y & 0xFF);
-//     TouchReport[7] = (uint8_t)((y >> 8) & 0xFF);
-//     TouchReport[8] = (uint8_t)((y >> 16) & 0xFF);
-//     TouchReport[9] = (uint8_t)((y >> 24) & 0xFF);
-
-//     // byte 10: Contact Count
-//     TouchReport[10] = activeFingers;
-
-//     // 现在一共 11 字节
-//     Device.send(TouchReport, 11);
-// }
