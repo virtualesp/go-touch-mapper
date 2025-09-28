@@ -4,3 +4,4 @@ go-touch-mapper
 go-touch-mapper_arm64
 go-touch-mapper-gh-pages/build
 *.spec
+default.json

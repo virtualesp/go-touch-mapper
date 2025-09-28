@@ -49,9 +49,10 @@ CGO_ENABLE=0 GOOS=linux go build -ldflags="-s -w"
 
 ```
 usage: go-touch-mapper [-h|--help] [-c|--config "<value>"] [--create-js-info]
-                       [-t|--touch-disabled] [-i|--inputManager <integer>]
-                       [-r|--remoteControl] [-p|--port <integer>]
-                       [-v|--v-mouse] [--auto-release <integer>]
+                       [--pattern "<value>"] [-t|--touch-disabled]
+                       [-i|--inputManager <integer>] [--tty-path "<value>"]
+                       [--tty-screen "<value>"] [-r|--remoteControl] [-p|--port
+                       <integer>] [-v|--v-mouse] [--auto-release <integer>]
                        [--measure-mode] [-d|--debug_mode]
 
 
@@ -62,9 +63,17 @@ Arguments:
   -c  --config
                         指定配置文件路径，如果不存在则会使用默认模板创建
       --create-js-info  创建手柄配置文件模式. Default: false
+      --pattern         用于筛选设备名称的正则. Default: .*
   -t  --touch-disabled  关闭触屏混合. Default: false
-  -i  --inputManager    使用inputManager控制触摸 适配多显示器
-                        指定DisplayID. Default: -1
+  -i  --inputManager    DisplayID
+                        使用inputManager控制触摸，可用于控制外接显示器
+                        . Default: -1
+      --tty-path        串口设备路径
+                        将使用串口控制外接的HID设备模拟触屏.
+                        Default:
+      --tty-screen
+                        使用串口控制HID设备模拟触屏的屏幕参数，宽x高x旋转方向，例如1440x3440x1.
+                        Default: 1440x3440x1
   -r  --remoteControl   是否从UDP接收远程事件. Default: false
   -p  --port
                         指定监听远程事件的UDP端口号与控制后台端口.
@@ -73,7 +82,7 @@ Arguments:
                         用触摸操作模拟鼠标,需要额光标外显示程序.
                         Default: false
       --auto-release
-                        触发视角自动释放所需的静止ms数,50ms为检查单位,置0 禁用.
+                        触发视角自动释放所需的静止ms数,50ms为检查单位,置0禁用.
                         Default: 200
       --measure-mode
                         显示视角移动像素计数,且可输入数值模拟滑动,方向键可微调.
@@ -149,13 +158,31 @@ PC上 修改remote_control中sender("192.168.1.64:61069")为手机IP，端口默
 
 在同目录创建[addr.txt](remote_control/dist/addr.txt)，写入要控制设备的IP:端口
 
-
-
 运行
 
 ``` 
 python remote_control.py 
 ```
+
+## HID触屏
+
+使用ESP32-s3的HID库，创建一个外置触屏，在上位机通过串口通信的方式发送触摸指令
+
+优点在于无需在被控设备上安装任何软件或者执行指令
+
+### 使用方式
+
+* 刷入hid_touch.ino固件
+
+* 将键鼠手柄与ESP32-s3的串口连接到例如树莓派之类的linux设备上，USB口连接到被控设备
+
+* 执行 ```ls /dev | grep ttyACM``` 查看串口设备
+
+* 使用--tty-path指定串口设备，--tty-screen 执行屏幕尺寸与旋转方向，例如：```./go-touch-mapper--tty-path /dev/ttyACM0 --tty-screen 1920x1080x1``` 
+
+* 如需使用新的分辨率，先按单片机的rest，然后再重新运行程序
+
+
 ## [InputManager](https://github.com/RiderLty/inputManager-touch-interface)
 ### 说明
 由Scrcpy修改而来，使用app_process启动
