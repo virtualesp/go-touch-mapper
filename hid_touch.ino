@@ -17,12 +17,13 @@
 #include "USB.h"
 #include "USBHID.h"
 #include <string.h>
-
+#include <Preferences.h> // 用于访问非易失性存储
 // Using macros instead of "magic numbers" improves readability and maintainability.
 // These values are byte offsets calculated from the report_descriptor below.
 #define REPORT_DESC_MAX_X_OFFSET 41
 #define REPORT_DESC_MAX_Y_OFFSET 56
 
+Preferences preferences;
 USBHID HID;
 
 // HID Report Descriptor
@@ -111,15 +112,57 @@ CustomHIDDevice *Device = nullptr;
 #define CMD_SET_RESOLUTION 0x03
 #define SERIAL_BUFFER_SIZE 11
 
-static bool DeviceReady = false;
+bool setNVS(uint32_t maxX, uint32_t maxY) // return true if need restart
+{
+    bool flag = true;
+    preferences.begin("hid_config", false);
+    if (preferences.isKey("maxX") && preferences.isKey("maxY"))
+    {
+        const uint32_t DEFAULT_MAX_X = 1440 << 8;
+        const uint32_t DEFAULT_MAX_Y = 3200 << 8;
+        uint32_t oldMaxX = preferences.getUInt("maxX", DEFAULT_MAX_X);
+        uint32_t oldMaxY = preferences.getUInt("maxY", DEFAULT_MAX_Y);
+        if (oldMaxX == maxX && oldMaxY == maxY)
+        {
+            flag = false;
+        }
+        else
+        {
+            preferences.putUInt("maxX", maxX);
+            preferences.putUInt("maxY", maxY);
+        }
+    }
+    else
+    {
+        preferences.putUInt("maxX", maxX);
+        preferences.putUInt("maxY", maxY);
+    }
+    preferences.end();
+    return flag;
+}
+
+void setResolutionFromNVS()
+{
+    preferences.begin("hid_config", false); // false 表示读写模式
+    const uint32_t DEFAULT_MAX_X = 1440 << 8;
+    const uint32_t DEFAULT_MAX_Y = 3200 << 8;
+    uint32_t maxX = preferences.getUInt("maxX", DEFAULT_MAX_X);
+    uint32_t maxY = preferences.getUInt("maxY", DEFAULT_MAX_Y);
+    preferences.end();
+    Serial.printf("INFO: using saved HID resolution: %u,%u\n", maxX, maxY);
+    memcpy(&report_descriptor[REPORT_DESC_MAX_X_OFFSET], &maxX, sizeof(uint32_t));
+    memcpy(&report_descriptor[REPORT_DESC_MAX_Y_OFFSET], &maxY, sizeof(uint32_t));
+}
 
 void initDevice()
 {
     // CHANGE 2: Create an instance of the CustomHIDDevice class.
     // This check prevents memory leaks if the function is called multiple times.
-    if (Device) {
+    if (Device)
+    {
         delete Device;
     }
+    setResolutionFromNVS();
     Device = new CustomHIDDevice();
 
     // Use the -> operator to access members of the object via its pointer.
@@ -134,26 +177,24 @@ void initDevice()
 
     if (HID.ready())
     {
-        Serial.println("HID ready.");
-        DeviceReady = true;
+        Serial.println("INFO: HID ready.");
     }
     else
     {
-        Serial.println("HID initialization failed.");
-        // Clean up the allocated object if initialization fails
+        Serial.println("ERROR: HID initialization failed.");
         delete Device;
         Device = nullptr;
-        DeviceReady = false;
     }
     delay(1000); // Wait for serial monitor to connect
-    Serial.println("ESP32-S3 Touch HID init over");
+    Serial.println("INFO: HID Touch init over");
 }
 
 void setup()
 {
     Serial.setRxBufferSize(2048); // Increase serial receive buffer size
     Serial.begin(2000000);
-    Serial.println("ESP32-S3 Touch HID waiting for CMD_SET_RESOLUTION ");
+    Serial.println("\n\nINFO: Device initialization");
+    initDevice(); // Now, initialize the device with the new descriptor
 }
 
 static uint8_t serial_buffer[SERIAL_BUFFER_SIZE];
@@ -168,30 +209,26 @@ void loop()
             // You can add a timeout here if needed
         }
         Serial.readBytes(serial_buffer, SERIAL_BUFFER_SIZE);
-        Serial.printf("BYTES : %d %d %d %d %d %d %d %d %d %d %d\n", serial_buffer[0], serial_buffer[1], serial_buffer[2], serial_buffer[3], serial_buffer[4], serial_buffer[5], serial_buffer[6], serial_buffer[7], serial_buffer[8], serial_buffer[9], serial_buffer[10]);
+        // Serial.printf("BYTES : %d %d %d %d %d %d %d %d %d %d %d\n", serial_buffer[0], serial_buffer[1], serial_buffer[2], serial_buffer[3], serial_buffer[4], serial_buffer[5], serial_buffer[6], serial_buffer[7], serial_buffer[8], serial_buffer[9], serial_buffer[10]);
 
-        // BUG FIX: Changed assignment '=' to comparison '==' and simplified logic to '!DeviceReady'
-        if (serial_buffer[0] == CMD_SET_RESOLUTION && !DeviceReady)
+        if (serial_buffer[0] == CMD_SET_RESOLUTION)
         {
             // If it's a command to set the resolution
             uint32_t newMaxX, newMaxY;
             memcpy(&newMaxX, &serial_buffer[1], sizeof(uint32_t));
             memcpy(&newMaxY, &serial_buffer[5], sizeof(uint32_t));
-            Serial.println("...");
-            Serial.printf("INFO: set HID resolution: %u,%u\n", newMaxX, newMaxY);
-
-            // Update the report descriptor with the new resolution
-            memcpy(&report_descriptor[REPORT_DESC_MAX_X_OFFSET], &serial_buffer[1], sizeof(uint32_t));
-            memcpy(&report_descriptor[REPORT_DESC_MAX_Y_OFFSET], &serial_buffer[5], sizeof(uint32_t));
-
-            delay(100); // Short delay to ensure serial messages are sent
-            initDevice(); // Now, initialize the device with the new descriptor
+            if (setNVS(newMaxX, newMaxY))
+            {
+                Serial.printf("INFO: set HID resolution: %u,%u The device is restarting... \n", newMaxX, newMaxY);
+                delay(100);
+                ESP.restart();
+            }
         }
         else
         {
             // If it's a touch data report
             // CHANGE 3: Check if the Device pointer is valid and ready before sending a report.
-            if (DeviceReady && Device)
+            if (Device)
             {
                 // Use the -> operator to call the method.
                 Device->send(serial_buffer, SERIAL_BUFFER_SIZE);
