@@ -1109,23 +1109,24 @@ func (self *TouchHandler) handel_event() {
 			}
 			var perfPoint time.Time
 
-			perfPoint = time.Now()
-			self.handel_rel_event(x, y, HWhell, Wheel)
-			rel_sin := time.Since(perfPoint)
-
-			perfPoint = time.Now()
-			self.handel_key_events(key_events, event_pack.dev_type, event_pack.dev_name)
-			key_sin := time.Since(perfPoint)
-
-			perfPoint = time.Now()
-			self.handel_abs_events(abs_events, event_pack.dev_type, event_pack.dev_name)
-			abs_sin := time.Since(perfPoint)
-
+			if x != 0 || y != 0 || HWhell != 0 || Wheel != 0 {
+				perfPoint = time.Now()
+				self.handel_rel_event(x, y, HWhell, Wheel)
+				logger.Debugf("rel_event\t%v \n", time.Since(perfPoint))
+			}
+			if len(key_events) != 0 {
+				perfPoint = time.Now()
+				self.handel_key_events(key_events, event_pack.dev_type, event_pack.dev_name)
+				key_sin := time.Since(perfPoint)
+				logger.Debugf("key_events\t%v \n", key_sin)
+			}
+			if len(abs_events) != 0 {
+				perfPoint = time.Now()
+				self.handel_abs_events(abs_events, event_pack.dev_type, event_pack.dev_name)
+				abs_sin := time.Since(perfPoint)
+				logger.Debugf("abs_events\t%v \n", abs_sin)
+			}
 			// logger.Debugf("event pack:%v", event_pack)
-			logger.Debugf("rel_event\t%v \n", rel_sin)
-			logger.Debugf("key_events\t%v \n", key_sin)
-			logger.Debugf("abs_events\t%v \n", abs_sin)
-
 		}
 	}
 }

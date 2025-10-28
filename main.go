@@ -459,6 +459,23 @@ func parseHIDTouchScreen(s string) (x, y uint32, r int, err error) {
 	return x, y, r, nil
 }
 
+func parseSenderAddress(s string, defaultPort int) (string, int, error) {
+	parts := strings.Split(s, ":")
+	if len(parts) == 1 {
+		ip := parts[0]
+		return ip, defaultPort, nil
+	}
+	if len(parts) == 2 {
+		ip := parts[0]
+		port, err := strconv.Atoi(parts[1])
+		if err != nil {
+			return "", 0, fmt.Errorf("invalid port value: %v", err)
+		}
+		return ip, port, nil
+	}
+	return "", 0, fmt.Errorf("invalid address format: expected 'IP' or 'IP:PORT', got %s", s)
+}
+
 func fileExists(filename string) bool {
 	_, err := os.Stat(filename)
 	return !os.IsNotExist(err)
@@ -517,6 +534,12 @@ func main() {
 		Help:     "是否从UDP接收远程事件",
 	})
 
+	var as_remote_control *string = parser.String("s", "sender", &argparse.Options{
+		Required: false,
+		Default:  "",
+		Help:     "发送本地事件到远程，输入 IP:PORT 例如 192.168.3.7:61069 或者仅输入IP使用默认端口61069",
+	})
+
 	var port *int = parser.Int("p", "port", &argparse.Options{
 		Required: false,
 		Help:     "指定监听远程事件的UDP端口号与控制后台端口",
@@ -553,84 +576,115 @@ func main() {
 		os.Exit(1)
 	}
 
-	if *usingInputManagerID != -1 && *usingHIDTouchTtyPath != "" {
-		logger.Error("无法同时使用inputManager与HID")
-		os.Exit(2)
-	}
-
-	hid_x, hid_y, hid_r, err := parseHIDTouchScreen(*usingHIDTouchScreen)
-	if err != nil {
-		logger.Error("解析失败: %v\n", err)
-		return
-	}
-
-	if *debug_mode {
-		logger.WithDebug()
-		logger.Debug("debug on")
-	}
-
-	if *configPath == "" {
-		logger.Warn("未指定配置文件，使用默认配置文件")
-		exePath, err := os.Executable()
+	if *as_remote_control != "" {
+		ip, port, err := parseSenderAddress(*as_remote_control, 61069)
 		if err != nil {
-			fmt.Println("获取可执行文件路径失败:", err)
+			logger.Errorf("解析发送地址失败: %v", err)
 			return
 		}
-		exeDir := filepath.Dir(exePath)
-		*configPath = filepath.Join(exeDir, "default.json")
-	}
-	if !fileExists(*configPath) {
-		bytes, err := configs.ReadFile("configs/EXAMPLE.JSON")
+		logger.Infof("启动远程事件发送器 目标地址 %s:%d", ip, port)
+		events_ch := make(chan *event_pack) //主要设备事件管道
+		go auto_detect_and_read(events_ch, *patern)
+		conn, err := net.DialUDP("udp", nil, &net.UDPAddr{
+			IP:   net.ParseIP(ip),
+			Port: port,
+		})
 		if err != nil {
-			logger.Infof("读取内置配置文件configs/EXAMPLE.JSON错误:%v", err)
+			fmt.Println("Dial UDP failed, err:", err)
 			return
 		}
+		defer conn.Close()
 
-		logger.Infof("已从模板创建配置文件:%v", *configPath)
-
-		os.WriteFile(*configPath, bytes, 0644)
-
-	}
-
-	logger.Infof("使用配置文件: %v", *configPath)
-
-	if *create_js_info {
-		auto_detect_result := get_possible_device_indexes(make(map[int]bool))
-		devTypeFriendlyName := map[dev_type]string{
-			type_mouse:    "鼠标",
-			type_keyboard: "键盘",
-			type_joystick: "手柄",
-			type_touch:    "触屏",
-			type_unknown:  "未知",
-		}
-		for index, devType := range auto_detect_result {
-			devName := get_dev_name_by_index(index)
-			logger.Infof("检测到设备 %s(/dev/input/event%d) : %s", devName, index, devTypeFriendlyName[devType])
-		}
-		js_events := make([]int, 0)
-		for index, devType := range auto_detect_result {
-			if devType == type_joystick {
-				js_events = append(js_events, index)
+		pack_count := 0
+		pack_size := 0
+		go (func() {
+			ticker := time.NewTicker(time.Second * 1)
+			for {
+				select {
+				case <-global_close_signal:
+					return
+				case <-ticker.C:
+					logger.Infof("发送频率: %d Pack/s 发送数据量: %d B/s\r", pack_count, pack_size)
+					pack_count = 0
+					pack_size = 0
+				}
 			}
-		}
-		if len(js_events) == 1 {
-			create_js_info_file(js_events[0])
-		} else {
-			if len(js_events) == 0 {
-				logger.Warn("未检测到手柄")
-			} else {
-				logger.Warn("检测到多个手柄,断开其他手柄的连接")
+		})()
+
+		data := make([]byte, 4096)
+		for {
+			select {
+			case <-global_close_signal:
+				return
+			case pack := <-events_ch:
+				event_count := len(pack.events)
+				data[0] = byte(event_count)
+				for i, event := range pack.events {
+					offset := 1 + i*8
+					binary.LittleEndian.PutUint16(data[offset:offset+2], uint16(event.Type))
+					binary.LittleEndian.PutUint16(data[offset+2:offset+4], event.Code)
+					binary.LittleEndian.PutUint32(data[offset+4:offset+8], uint32(event.Value))
+				}
+				name_offset := 1 + event_count*8
+				data[name_offset] = byte(pack.dev_type)
+				if pack.dev_type == type_keyboard || pack.dev_type == type_mouse {
+					pack.dev_name = "rkm"
+				}
+				copy(data[name_offset+1:], []byte(pack.dev_name))
+				data_length := name_offset + 1 + len(pack.dev_name)
+				_, err = conn.Write(data[:data_length])
+				pack_count++
+				pack_size += data_length
+				if err != nil {
+					fmt.Println("Send data failed, err:", err)
+					return
+				}
 			}
 		}
 	} else {
-		events_ch := make(chan *event_pack) //主要设备事件管道
+		if *usingInputManagerID != -1 && *usingHIDTouchTtyPath != "" {
+			logger.Error("无法同时使用inputManager与HID")
+			os.Exit(2)
+		}
 
-		u_input_control_ch := make(chan *u_input_control_pack)
-		fileted_u_input_control_ch := make(chan *u_input_control_pack)
-		touch_event_ch := make(chan *event_pack)
-		max_mt_x, max_mt_y := int32(1), int32(1)
+		hid_x, hid_y, hid_r, err := parseHIDTouchScreen(*usingHIDTouchScreen)
+		if err != nil {
+			logger.Error("解析失败: %v\n", err)
+			return
+		}
 
-		if !*mixTouchDisabled {
+		if *debug_mode {
+			logger.WithDebug()
+			logger.Debug("debug on")
+		}
+
+		if *configPath == "" {
+			logger.Warn("未指定配置文件，使用默认配置文件")
+			exePath, err := os.Executable()
+			if err != nil {
+				fmt.Println("获取可执行文件路径失败:", err)
+				return
+			}
+			exeDir := filepath.Dir(exePath)
+			*configPath = filepath.Join(exeDir, "default.json")
+		}
+		if !fileExists(*configPath) {
+			bytes, err := configs.ReadFile("configs/EXAMPLE.JSON")
+			if err != nil {
+				logger.Infof("读取内置配置文件configs/EXAMPLE.JSON错误:%v", err)
+				return
+			}
+
+			logger.Infof("已从模板创建配置文件:%v", *configPath)
+
+			os.WriteFile(*configPath, bytes, 0644)
+
+		}
+
+		logger.Infof("使用配置文件: %v", *configPath)
+
+		if *create_js_info {
+			auto_detect_result := get_possible_device_indexes(make(map[int]bool))
 			devTypeFriendlyName := map[dev_type]string{
 				type_mouse:    "鼠标",
 				type_keyboard: "键盘",
@@ -638,100 +692,135 @@ func main() {
 				type_touch:    "触屏",
 				type_unknown:  "未知",
 			}
-			for index, devType := range get_possible_device_indexes(make(map[int]bool)) {
-				if devType == type_touch {
-					devName := get_dev_name_by_index(index)
-					logger.Infof("启用触屏混合 %s(/dev/input/event%d) : %s", devName, index, devTypeFriendlyName[devType])
-					go dev_reader(touch_event_ch, index)
-					max_mt_x, max_mt_y = get_MT_size(map[int]bool{index: true})
-					break
+			for index, devType := range auto_detect_result {
+				devName := get_dev_name_by_index(index)
+				logger.Infof("检测到设备 %s(/dev/input/event%d) : %s", devName, index, devTypeFriendlyName[devType])
+			}
+			js_events := make([]int, 0)
+			for index, devType := range auto_detect_result {
+				if devType == type_joystick {
+					js_events = append(js_events, index)
 				}
 			}
-		}
-
-		go auto_detect_and_read(events_ch, *patern)
-
-		go handel_u_input_mouse_keyboard(fileted_u_input_control_ch)
-
-		var touch_control_func touch_control_func
-
-		if *usingHIDTouchTtyPath != "" {
-			logger.Info("触屏控制将使用串口控制外接的HID设备处理")
-			logger.Infof("串口路径：%s", *usingHIDTouchTtyPath)
-			logger.Infof("HID触屏尺寸：%dx%d", hid_x, hid_y)
-			logger.Infof("HID触屏方向：%d", hid_r)
-
-			port, err := OpenSerialWritePipe(*usingHIDTouchTtyPath, 2000000)
-			if err != nil {
-				logger.Errorf("无法打开串口: %v", err)
-				return
+			if len(js_events) == 1 {
+				create_js_info_file(js_events[0])
+			} else {
+				if len(js_events) == 0 {
+					logger.Warn("未检测到手柄")
+				} else {
+					logger.Warn("检测到多个手柄,断开其他手柄的连接")
+				}
 			}
-			touch_control_func = handel_touch_using_hid_manager(port, hid_x, hid_y, hid_r)
-			touch_control_func(touch_control_pack{
-				action:   TouchActionResetResolution,
-				id:       0,
-				x:        int32(hid_x),
-				y:        int32(hid_y),
-				screen_x: int32(hid_x),
-				screen_y: int32(hid_y),
-			})
-
-		} else if *usingInputManagerID != -1 {
-			logger.Info("触屏控制将使用inputManager处理")
-			go listen_device_orientation()
-			touch_control_func = handel_touch_using_input_manager(*usingInputManagerID)
 		} else {
-			touch_control_func = handel_touch_using_uinput_touch()
-			go listen_device_orientation()
-		}
+			events_ch := make(chan *event_pack) //主要设备事件管道
+			u_input_control_ch := make(chan *u_input_control_pack)
+			fileted_u_input_control_ch := make(chan *u_input_control_pack)
+			touch_event_ch := make(chan *event_pack)
+			max_mt_x, max_mt_y := int32(1), int32(1)
 
-		map_switch_signal := make(chan bool) //通知虚拟鼠标当前为鼠标还是映射模式
-		touchHandler := InitTouchHandler(
-			*configPath,
-			events_ch,
-			touch_control_func,
-			u_input_control_ch,
-			*usingInputManagerID == -1,
-			map_switch_signal,
-			*measure_sensitivity_mode,
-		)
-		if *usingHIDTouchTtyPath == "" {
-			go touchHandler.mix_touch(touch_event_ch, max_mt_x, max_mt_y)
-		}
-		go touchHandler.auto_handel_view_release(*view_release_timeout)
-		go touchHandler.loop_handel_wasd_wheel()
-		go touchHandler.loop_handel_rs_move()
-		go touchHandler.handel_event()
-		if *using_v_mouse {
-			v_mouse := init_v_mouse_controller(touchHandler, u_input_control_ch, fileted_u_input_control_ch, map_switch_signal)
-			go v_mouse.main_loop()
-		} else {
-			go (func() {
-				for {
-					select {
-					case tmp := <-u_input_control_ch:
-						fileted_u_input_control_ch <- tmp
-					case <-map_switch_signal:
+			if !*mixTouchDisabled {
+				devTypeFriendlyName := map[dev_type]string{
+					type_mouse:    "鼠标",
+					type_keyboard: "键盘",
+					type_joystick: "手柄",
+					type_touch:    "触屏",
+					type_unknown:  "未知",
+				}
+				for index, devType := range get_possible_device_indexes(make(map[int]bool)) {
+					if devType == type_touch {
+						devName := get_dev_name_by_index(index)
+						logger.Infof("启用触屏混合 %s(/dev/input/event%d) : %s", devName, index, devTypeFriendlyName[devType])
+						go dev_reader(touch_event_ch, index)
+						max_mt_x, max_mt_y = get_MT_size(map[int]bool{index: true})
+						break
 					}
 				}
-			})()
+			}
+
+			go auto_detect_and_read(events_ch, *patern)
+
+			go handel_u_input_mouse_keyboard(fileted_u_input_control_ch)
+
+			var touch_control_func touch_control_func
+
+			if *usingHIDTouchTtyPath != "" {
+				logger.Info("触屏控制将使用串口控制外接的HID设备处理")
+				logger.Infof("串口路径：%s", *usingHIDTouchTtyPath)
+				logger.Infof("HID触屏尺寸：%dx%d", hid_x, hid_y)
+				logger.Infof("HID触屏方向：%d", hid_r)
+
+				port, err := OpenSerialWritePipe(*usingHIDTouchTtyPath, 2000000)
+				if err != nil {
+					logger.Errorf("无法打开串口: %v", err)
+					return
+				}
+				touch_control_func = handel_touch_using_hid_manager(port, hid_x, hid_y, hid_r)
+				touch_control_func(touch_control_pack{
+					action:   TouchActionResetResolution,
+					id:       0,
+					x:        int32(hid_x),
+					y:        int32(hid_y),
+					screen_x: int32(hid_x),
+					screen_y: int32(hid_y),
+				})
+
+			} else if *usingInputManagerID != -1 {
+				logger.Info("触屏控制将使用inputManager处理")
+				go listen_device_orientation()
+				touch_control_func = handel_touch_using_input_manager(*usingInputManagerID)
+			} else {
+				touch_control_func = handel_touch_using_uinput_touch()
+				go listen_device_orientation()
+			}
+
+			map_switch_signal := make(chan bool) //通知虚拟鼠标当前为鼠标还是映射模式
+			touchHandler := InitTouchHandler(
+				*configPath,
+				events_ch,
+				touch_control_func,
+				u_input_control_ch,
+				*usingInputManagerID == -1,
+				map_switch_signal,
+				*measure_sensitivity_mode,
+			)
+			if *usingHIDTouchTtyPath == "" {
+				go touchHandler.mix_touch(touch_event_ch, max_mt_x, max_mt_y)
+			}
+			go touchHandler.auto_handel_view_release(*view_release_timeout)
+			go touchHandler.loop_handel_wasd_wheel()
+			go touchHandler.loop_handel_rs_move()
+			go touchHandler.handel_event()
+			if *using_v_mouse {
+				v_mouse := init_v_mouse_controller(touchHandler, u_input_control_ch, fileted_u_input_control_ch, map_switch_signal)
+				go v_mouse.main_loop()
+			} else {
+				go (func() {
+					for {
+						select {
+						case tmp := <-u_input_control_ch:
+							fileted_u_input_control_ch <- tmp
+						case <-map_switch_signal:
+						}
+					}
+				})()
+			}
+
+			if *using_remote_control {
+				go udp_event_injector(events_ch, *port)
+			}
+
+			if *measure_sensitivity_mode {
+				go stdin_control_view_move(touchHandler)
+			}
+
+			go serve(*port, *configPath, touchHandler.reloadConfigure) //启动服务器
+
+			exitChan := make(chan os.Signal)
+			signal.Notify(exitChan, os.Interrupt, os.Kill, syscall.SIGTERM)
+			<-exitChan
+			close(global_close_signal)
+			logger.Info("已停止")
+			time.Sleep(time.Millisecond * 40)
 		}
-
-		if *using_remote_control {
-			go udp_event_injector(events_ch, *port)
-		}
-
-		if *measure_sensitivity_mode {
-			go stdin_control_view_move(touchHandler)
-		}
-
-		go serve(*port, *configPath, touchHandler.reloadConfigure) //启动服务器
-
-		exitChan := make(chan os.Signal)
-		signal.Notify(exitChan, os.Interrupt, os.Kill, syscall.SIGTERM)
-		<-exitChan
-		close(global_close_signal)
-		logger.Info("已停止")
-		time.Sleep(time.Millisecond * 40)
 	}
 }
