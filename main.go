@@ -690,22 +690,57 @@ func main() {
 	}
 
 	//=================================================================================================================================
+	// pluginManager, err := InitPluginManager()
+	// if err != nil {
+	// 	logger.Errorf("初始化插件管理器失败: %v", err)
+	// 	os.Exit(1)
+	// }
+
+	// pluginManager.init()
+
+	// x, y := pluginManager.get_rand_click_target(0, 1, 2, 3, 4)
+	// logger.Infof("插件测试随机坐标: x=%d y=%d", x, y)
+
+	// x, y = pluginManager.get_wheel_move_offset(01, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 23, 13, 14)
+	// logger.Infof("插件测试滚轮偏移: x=%d y=%d", x, y)
+	// // pluginManager.func_Plugin_get_wheel_move_offset(1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, map[string]interface{}{}, time.Now().UnixNano())
+
+	// logger.Info("插件配置模板:" + pluginManager.config_template)
+
+	// os.Exit(0)
+
+	// testPlugin()
+
 	pluginManager, err := InitPluginManager()
 	if err != nil {
 		logger.Errorf("初始化插件管理器失败: %v", err)
 		os.Exit(1)
 	}
 
-	pluginManager.init()
+	for i := 0; i < 10; i++ {
+		x, y := pluginManager.get_rand_click_target(50, 60, 1280, 720, 1234)
+		fmt.Printf("get_rand_click_target => (%d,%d)\n", x, y)
+	}
 
-	x, y := pluginManager.get_rand_click_target(0, 1, 2, 3, 4)
-	logger.Infof("插件测试随机坐标: x=%d y=%d", x, y)
-
-	x, y = pluginManager.get_wheel_move_offset(01, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 23, 13, 14)
-	logger.Infof("插件测试滚轮偏移: x=%d y=%d", x, y)
-	// pluginManager.func_Plugin_get_wheel_move_offset(1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, map[string]interface{}{}, time.Now().UnixNano())
-
-	logger.Info("插件配置模板:" + pluginManager.config_template)
+	for i := 0; i < 10; i++ {
+		x, y := pluginManager.get_wheel_move_offset(
+			1,     // wheel_x
+			1,     // wheel_y
+			300,   // wheel_radius
+			0,     // shift_pressed
+			500,   // center_x
+			500,   // center_y
+			1920,  // screen_x
+			1080,  // screen_y
+			500,   // now_x  <-- 模拟当前触摸点
+			500,   // now_y
+			1,     // last_move_x
+			0,     // last_move_y
+			50,    // state_counter
+			12345, // seed
+		)
+		fmt.Printf("get_wheel_move_offset => (%d,%d)\n", x, y)
+	}
 
 	os.Exit(0)
 
