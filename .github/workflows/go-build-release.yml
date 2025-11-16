@@ -27,7 +27,7 @@ jobs:
         go-version: 1.18
     
     - name: install go-bindata
-      run: sudo apt-get install go-bindata rclone -y
+      run: sudo apt-get install go-bindata gcc-aarch64-linux-gnu -y
 
     - name: build assets
       run: go-bindata -pkg main -o inputManager.go-bindata.go inputManager.apk 

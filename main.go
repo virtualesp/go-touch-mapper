@@ -689,6 +689,26 @@ func main() {
 		logger.Debug("debug on")
 	}
 
+	//=================================================================================================================================
+	pluginManager, err := InitPluginManager()
+	if err != nil {
+		logger.Errorf("初始化插件管理器失败: %v", err)
+		os.Exit(1)
+	}
+
+	pluginManager.init()
+
+	x, y := pluginManager.get_rand_click_target(0, 1, 2, 3, 4)
+	logger.Infof("插件测试随机坐标: x=%d y=%d", x, y)
+
+	x, y = pluginManager.get_wheel_move_offset(01, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 23, 13, 14)
+	logger.Infof("插件测试滚轮偏移: x=%d y=%d", x, y)
+	// pluginManager.func_Plugin_get_wheel_move_offset(1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, map[string]interface{}{}, time.Now().UnixNano())
+
+	logger.Info("插件配置模板:" + pluginManager.config_template)
+
+	os.Exit(0)
+
 	if *create_js_info {
 		//=================================================================================================================================
 		// 创建手柄配置文件部分
