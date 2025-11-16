@@ -717,12 +717,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 3; i++ {
 		x, y := pluginManager.get_rand_click_target(50, 60, 1280, 720, 1234)
 		fmt.Printf("get_rand_click_target => (%d,%d)\n", x, y)
 	}
 
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 3; i++ {
 		x, y := pluginManager.get_wheel_move_offset(
 			1,     // wheel_x
 			1,     // wheel_y

@@ -85,12 +85,13 @@ extern "C" {
 /*
 返回插件的配置模板，格式为JSON字符串，支持的配置项类型包括：
 
-number: 数值类型，支持min和max属性
+int32: 数值类型，支持min和max属性
 
-switch: 布尔类型，表示开关
+bool: 布尔类型，表示开关
 
 string: 字符串类型
 
+select: 选项类型，值为index
 具体示例见下方
 
 将会渲染在网页配置页面中
@@ -112,6 +113,7 @@ extern char* Plugin_ID();
 extern char* Plugin_Init();
 
 // =====================================================================================================
+// 以下为包装函数，不要修改
 //
 extern void Plugin_get_rand_click_target_c(int32_t* inputs_i32, int64_t timestamp, char* config_json, int32_t config_len, int32_t* outputs_i32);
 extern void Plugin_get_wheel_move_offset_c(int32_t* inputs_i32, int64_t timestamp, char* config_json, int32_t config_len, int32_t* outputs_i32);

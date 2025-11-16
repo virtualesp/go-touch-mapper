@@ -71,7 +71,11 @@ void call_rand_click(
 import "C"
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"time"
 	"unsafe"
 
@@ -95,14 +99,16 @@ type PluginManager struct {
 }
 
 func InitPluginManager() (*PluginManager, error) {
-	fmt.Println("test")
-	cpath := C.CString("./plugin/plugin.so")
+	path, _ := exec.LookPath(os.Args[0])
+	abspath, _ := filepath.Abs(path)
+	workingDir, _ := filepath.Split(abspath)
+	pluginPath := filepath.Join(workingDir, "plugin.so")
+	cpath := C.CString(pluginPath)
 
 	h := C.dlopen(cpath, C.RTLD_LAZY)
 	if h == nil {
-		panic("dlopen failed")
+		return nil, errors.New(fmt.Sprintf("未加载 %v\n", pluginPath))
 	}
-	fmt.Printf("dlopen success %v\n", h)
 
 	click_func_ptr := C.dlsym(h, C.CString("Plugin_get_rand_click_target_c"))
 	wheel_func_ptr := C.dlsym(h, C.CString("Plugin_get_wheel_move_offset_c"))
@@ -120,9 +126,11 @@ func InitPluginManager() (*PluginManager, error) {
 
 	if err != nil {
 		logger.Debugf("插件默认配置解析失败: %v", err)
+		return nil, err
 	} else {
 		if err != nil {
 			logger.Debugf("插件默认配置编码失败: %v", err)
+			return nil, err
 		} else {
 			for k, v := range config_template_json.MustMap() {
 				logger.Infof("插件默认配置项: %s = %v", k, v.(map[string]interface{})["default"])
@@ -134,7 +142,8 @@ func InitPluginManager() (*PluginManager, error) {
 
 	configBytes, err := json.Marshal(default_config)
 	if err != nil {
-		panic(err)
+		logger.Debugf("JSON解析失败: %v", err)
+		return nil, err
 	}
 	user_config_char := C.CBytes(configBytes) //记得释放
 	user_config_len := C.int32_t(len(configBytes))

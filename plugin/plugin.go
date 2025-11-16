@@ -26,12 +26,13 @@ var plugin_version = "v1.0.0"
 /*
 返回插件的配置模板，格式为JSON字符串，支持的配置项类型包括：
 
-number: 数值类型，支持min和max属性
+int32: 数值类型，支持min和max属性
 
-switch: 布尔类型，表示开关
+bool: 布尔类型，表示开关
 
 string: 字符串类型
 
+select: 选项类型，值为index
 具体示例见下方
 
 将会渲染在网页配置页面中
