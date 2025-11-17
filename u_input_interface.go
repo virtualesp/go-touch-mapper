@@ -33,7 +33,7 @@ func createDevice(f *os.File) (err error) {
 	return ioctl(f.Fd(), UIDEVCREATE(), uintptr(0))
 }
 
-func create_u_input_touch_screen(width int32, height int32) *os.File {
+func create_u_input_touch_screen() *os.File {
 	deviceFile, err := os.OpenFile("/dev/uinput", syscall.O_WRONLY|syscall.O_NONBLOCK, 0660)
 	if err != nil {
 		logger.Errorf("create u_input touch_screen error:%v", err)
@@ -287,9 +287,8 @@ func makeEventsMMap(size int) EventMap {
 func handel_touch_using_uinput_touch() touch_control_func {
 	var count int32 = 0    //BTN_TOUCH 申请时为1 则按下 释放时为0 则松开
 	var last_id int32 = -1 //ABS_MT_SLOT last_id每次动作后修改 如果不等则额外发送MT_SLOT事件
-	w, h := get_wm_size()
-	logger.Infof("已创建虚拟触屏 : %vx%v", w, h)
-	fd := create_u_input_touch_screen(w, h)
+	logger.Info("已创建虚拟触屏 ( 0x7ffffffe x 0x7ffffffe )")
+	fd := create_u_input_touch_screen()
 	unixFd := int(fd.Fd())
 	go func() {
 		<-global_close_signal

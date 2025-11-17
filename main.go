@@ -13,6 +13,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -51,6 +52,8 @@ type u_input_control_pack struct {
 
 type touch_control_func func(data touch_control_pack)
 
+var global_motion_sensors_range = make(map[string]map[uint16][]int32) //全局的传感器范围参数 { dev_name: { x:[-100,100] , y:[-200,200]  } }
+
 func dev_reader(event_reader chan *event_pack, index int) {
 	fd, err := os.OpenFile(fmt.Sprintf("/dev/input/event%d", index), os.O_RDONLY, 0)
 	if err != nil {
@@ -62,6 +65,15 @@ func dev_reader(event_reader chan *event_pack, index int) {
 	event_ch := d.Poll(context.Background())
 	events := make([]*evdev.Event, 0)
 	dev_name := d.Name()
+	dev_type := check_dev_type(d)
+
+	if dev_type == type_motion_sensors {
+		global_motion_sensors_range[dev_name] = map[uint16][]int32{}
+		for k, v := range d.AbsoluteTypes() {
+			global_motion_sensors_range[dev_name][uint16(k)] = []int32{v.Min, v.Max}
+		}
+		defer delete(global_motion_sensors_range, dev_name)
+	}
 	logger.Infof("开始读取设备 : %s", dev_name)
 	d.Lock()
 	defer d.Unlock()
@@ -77,7 +89,7 @@ func dev_reader(event_reader chan *event_pack, index int) {
 			} else if event.Type == evdev.SyncReport {
 				pack := &event_pack{
 					dev_name: dev_name,
-					dev_type: check_dev_type(d),
+					dev_type: dev_type,
 					events:   events,
 				}
 				event_reader <- pack
@@ -137,6 +149,7 @@ func touch_dev_reader(event_reader chan *event_pack, index int) {
 }
 
 func udp_event_injector(ch chan *event_pack, port int) {
+	time.Sleep(time.Duration(200) * time.Millisecond)
 	listen, err := net.ListenUDP("udp", &net.UDPAddr{
 		IP:   net.IPv4(0, 0, 0, 0),
 		Port: port,
@@ -275,11 +288,12 @@ func rotateAbsoluteXY(x, y int32) (int32, int32) { //根据方向旋转坐标
 type dev_type uint8
 
 const (
-	type_mouse    = dev_type(0)
-	type_keyboard = dev_type(1)
-	type_joystick = dev_type(2)
-	type_touch    = dev_type(3)
-	type_unknown  = dev_type(4)
+	type_mouse          = dev_type(0)
+	type_keyboard       = dev_type(1)
+	type_joystick       = dev_type(2)
+	type_touch          = dev_type(3)
+	type_motion_sensors = dev_type(4)
+	type_unknown        = dev_type(5)
 )
 
 func check_dev_type(dev *evdev.Evdev) dev_type {
@@ -310,23 +324,46 @@ func check_dev_type(dev *evdev.Evdev) dev_type {
 		return type_keyboard //键盘 检测keycode(1-70)
 	}
 
-	axis_count := 0
-	for i := evdev.AbsoluteX; i <= evdev.AbsoluteRZ; i++ {
-		_, ok := abs[i]
-		if ok {
-			axis_count++
+	axis_count := len(abs)
+	btn_count := len(key)
+	if axis_count >= 4 { //检测轴的数量是否有两个摇杆 可能存在误报
+		if btn_count == 0 { //如果大于4轴，且没有按键，认为是运动传感器
+			return type_motion_sensors
 		}
-	}
-	if axis_count >= 4 { //检测有两个摇杆
 		return type_joystick
 	}
 	return type_unknown
 }
 
+type byEventNum []os.FileInfo
+
+func (s byEventNum) Len() int      { return len(s) }
+func (s byEventNum) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
+func (s byEventNum) Less(i, j int) bool {
+	// 取纯数字部分
+	numI := mustNum(s[i].Name())
+	numJ := mustNum(s[j].Name())
+	return numI < numJ
+}
+
+func mustNum(name string) int {
+	base := strings.TrimPrefix(name, "event")
+	n, _ := strconv.Atoi(base)
+	return n
+}
+
 func get_possible_device_indexes(skipList map[int]bool) map[int]dev_type {
 	files, _ := ioutil.ReadDir("/dev/input")
+	var events []os.FileInfo
+	for _, f := range files {
+		if strings.HasPrefix(f.Name(), "event") {
+			events = append(events, f)
+		}
+	}
+
+	sort.Sort(byEventNum(events))
 	result := make(map[int]dev_type)
-	for _, file := range files {
+	for _, file := range events {
 		if file.IsDir() {
 			continue
 		}
@@ -502,7 +539,7 @@ func auto_detect_and_read(event_chan chan *event_pack, patern string) {
 					// logger.Debugf("设备名称 %s 不匹配 %s", devName, patern)
 					continue
 				}
-				if devType == type_mouse || devType == type_keyboard || devType == type_joystick {
+				if devType == type_mouse || devType == type_keyboard || devType == type_joystick || devType == type_motion_sensors {
 					logger.Infof("检测到设备 %s(/dev/input/event%d) : %s", devName, index, devTypeFriendlyName[devType])
 					localIndex := index
 					go func() {
@@ -512,34 +549,9 @@ func auto_detect_and_read(event_chan chan *event_pack, patern string) {
 					}()
 				}
 			}
-			time.Sleep(time.Duration(400) * time.Millisecond)
+			time.Sleep(time.Duration(500) * time.Millisecond)
 		}
 	}
-}
-
-func parseHIDTouchScreen(s string) (x, y uint32, r int, err error) {
-	parts := strings.Split(s, "x")
-	if len(parts) != 3 {
-		return 0, 0, 0, fmt.Errorf("invalid format: expected 3 parts separated by 'x', got %d", len(parts))
-	}
-	x64, err := strconv.ParseUint(parts[0], 10, 32)
-	if err != nil {
-		return 0, 0, 0, fmt.Errorf("invalid x value: %v", err)
-	}
-	x = uint32(x64)
-	y64, err := strconv.ParseUint(parts[1], 10, 32)
-	if err != nil {
-		return 0, 0, 0, fmt.Errorf("invalid y value: %v", err)
-	}
-	y = uint32(y64)
-	r, err = strconv.Atoi(parts[2])
-	if err != nil {
-		return 0, 0, 0, fmt.Errorf("invalid r value: %v", err)
-	}
-	if r < 0 || r > 3 {
-		return 0, 0, 0, fmt.Errorf("r value must be 0, 1, 2, or 3, got %d", r)
-	}
-	return x, y, r, nil
 }
 
 func parseSenderAddress(s string, defaultPort int) (string, int, error) {
@@ -711,49 +723,50 @@ func main() {
 
 	// testPlugin()
 
-	pluginManager, err := InitPluginManager()
-	if err != nil {
-		logger.Errorf("初始化插件管理器失败: %v", err)
-		os.Exit(1)
-	}
+	// pluginManager, err := InitPluginManager()
+	// if err != nil {
+	// 	logger.Errorf("初始化插件管理器失败: %v", err)
+	// 	os.Exit(1)
+	// }
 
-	for i := 0; i < 3; i++ {
-		x, y := pluginManager.get_rand_click_target(50, 60, 1280, 720, 1234)
-		fmt.Printf("get_rand_click_target => (%d,%d)\n", x, y)
-	}
+	// for i := 0; i < 3; i++ {
+	// 	x, y := pluginManager.get_rand_click_target(50, 60, 1280, 720, 1234)
+	// 	fmt.Printf("get_rand_click_target => (%d,%d)\n", x, y)
+	// }
 
-	for i := 0; i < 3; i++ {
-		x, y := pluginManager.get_wheel_move_offset(
-			1,     // wheel_x
-			1,     // wheel_y
-			300,   // wheel_radius
-			0,     // shift_pressed
-			500,   // center_x
-			500,   // center_y
-			1920,  // screen_x
-			1080,  // screen_y
-			500,   // now_x  <-- 模拟当前触摸点
-			500,   // now_y
-			1,     // last_move_x
-			0,     // last_move_y
-			50,    // state_counter
-			12345, // seed
-		)
-		fmt.Printf("get_wheel_move_offset => (%d,%d)\n", x, y)
-	}
+	// for i := 0; i < 3; i++ {
+	// 	x, y := pluginManager.get_wheel_move_offset(
+	// 		1,     // wheel_x
+	// 		1,     // wheel_y
+	// 		300,   // wheel_radius
+	// 		0,     // shift_pressed
+	// 		500,   // center_x
+	// 		500,   // center_y
+	// 		1920,  // screen_x
+	// 		1080,  // screen_y
+	// 		500,   // now_x  <-- 模拟当前触摸点
+	// 		500,   // now_y
+	// 		1,     // last_move_x
+	// 		0,     // last_move_y
+	// 		50,    // state_counter
+	// 		12345, // seed
+	// 	)
+	// 	fmt.Printf("get_wheel_move_offset => (%d,%d)\n", x, y)
+	// }
 
-	os.Exit(0)
+	// os.Exit(0)
 
 	if *create_js_info {
 		//=================================================================================================================================
 		// 创建手柄配置文件部分
 		auto_detect_result := get_possible_device_indexes(make(map[int]bool))
 		devTypeFriendlyName := map[dev_type]string{
-			type_mouse:    "鼠标",
-			type_keyboard: "键盘",
-			type_joystick: "手柄",
-			type_touch:    "触屏",
-			type_unknown:  "未知",
+			type_mouse:          "鼠标",
+			type_keyboard:       "键盘",
+			type_joystick:       "手柄",
+			type_touch:          "触屏",
+			type_motion_sensors: "运动传感器",
+			type_unknown:        "未知",
 		}
 		for index, devType := range auto_detect_result {
 			devName := get_dev_name_by_index(index)
@@ -879,12 +892,12 @@ func main() {
 		fileted_u_input_control_ch := make(chan *u_input_control_pack) //v-mouse下过滤拦截事件后的管道,如果不使用vmouse 则fileted_u_input_control_ch直接连接到u_input_control_ch
 
 		go auto_detect_and_read(main_events_ch, *patern)
-
 		if !*mixTouchDisabled && (*control_mode == "uinput" || *control_mode == "inputmanager") {
 			for index, devType := range get_possible_device_indexes(make(map[int]bool)) {
 				if devType == type_touch {
 					logger.Infof("启用触屏混合 %s(/dev/input/event%d)", get_dev_name_by_index(index), index)
 					go touch_dev_reader(mix_touch_event_ch, index)
+					break
 				}
 			}
 		}
@@ -1043,7 +1056,6 @@ func main() {
 		}
 
 		if *using_remote_control {
-			logger.Errorf("使用远程控制中。。。。")
 			go udp_event_injector(main_events_ch, *port)
 		}
 
