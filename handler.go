@@ -64,6 +64,7 @@ type TouchHandler struct {
 	wheel_shift_enable         bool  //启用shift轮盘
 	wheel_shift_switch_enable  bool  //shift轮盘切换 or 长按
 	wheel_shift_range          int32
+	pm                         *PluginManager
 }
 
 const (
@@ -126,6 +127,7 @@ func InitTouchHandler(
 	u_input chan *u_input_control_pack,
 	map_switch_signal chan bool,
 	measure_sensitivity_mode bool,
+	pm *PluginManager,
 ) *TouchHandler {
 	rand.Seed(time.Now().UnixNano())
 
@@ -356,6 +358,7 @@ func InitTouchHandler(
 		wheel_shift_enable:         config_json.Get("WHEEL").Get("SHIFT_RANGE_ENABLE").MustBool(),
 		wheel_shift_switch_enable:  config_json.Get("WHEEL").Get("SHIFT_RANGE_SWITCH_ENABLE").MustBool(),
 		wheel_shift_range:          int32(config_json.Get("WHEEL").Get("SHIFT_RANGE").MustFloat64() * float64(screenSizeX)),
+		pm:                         pm,
 	}
 }
 

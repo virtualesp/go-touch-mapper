@@ -237,7 +237,7 @@ var global_screen_y int32 = 1000
 func get_device_orientation() int32 {
 	output, err := exec.Command("sh", "-c", "dumpsys input").Output()
 	if err != nil {
-		panic(err)
+		return 0
 	}
 	re := regexp.MustCompile(`orientation=(\d+)`)
 	matches := re.FindStringSubmatch(string(output))
@@ -701,61 +701,6 @@ func main() {
 		logger.Debug("debug on")
 	}
 
-	//=================================================================================================================================
-	// pluginManager, err := InitPluginManager()
-	// if err != nil {
-	// 	logger.Errorf("初始化插件管理器失败: %v", err)
-	// 	os.Exit(1)
-	// }
-
-	// pluginManager.init()
-
-	// x, y := pluginManager.get_rand_click_target(0, 1, 2, 3, 4)
-	// logger.Infof("插件测试随机坐标: x=%d y=%d", x, y)
-
-	// x, y = pluginManager.get_wheel_move_offset(01, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 23, 13, 14)
-	// logger.Infof("插件测试滚轮偏移: x=%d y=%d", x, y)
-	// // pluginManager.func_Plugin_get_wheel_move_offset(1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, map[string]interface{}{}, time.Now().UnixNano())
-
-	// logger.Info("插件配置模板:" + pluginManager.config_template)
-
-	// os.Exit(0)
-
-	// testPlugin()
-
-	// pluginManager, err := InitPluginManager()
-	// if err != nil {
-	// 	logger.Errorf("初始化插件管理器失败: %v", err)
-	// 	os.Exit(1)
-	// }
-
-	// for i := 0; i < 3; i++ {
-	// 	x, y := pluginManager.get_rand_click_target(50, 60, 1280, 720, 1234)
-	// 	fmt.Printf("get_rand_click_target => (%d,%d)\n", x, y)
-	// }
-
-	// for i := 0; i < 3; i++ {
-	// 	x, y := pluginManager.get_wheel_move_offset(
-	// 		1,     // wheel_x
-	// 		1,     // wheel_y
-	// 		300,   // wheel_radius
-	// 		0,     // shift_pressed
-	// 		500,   // center_x
-	// 		500,   // center_y
-	// 		1920,  // screen_x
-	// 		1080,  // screen_y
-	// 		500,   // now_x  <-- 模拟当前触摸点
-	// 		500,   // now_y
-	// 		1,     // last_move_x
-	// 		0,     // last_move_y
-	// 		50,    // state_counter
-	// 		12345, // seed
-	// 	)
-	// 	fmt.Printf("get_wheel_move_offset => (%d,%d)\n", x, y)
-	// }
-
-	// os.Exit(0)
-
 	if *create_js_info {
 		//=================================================================================================================================
 		// 创建手柄配置文件部分
@@ -1004,8 +949,9 @@ func main() {
 			logger.Errorf("未知模式%s,可用模式:uinput,inputmanager,hid,otg,direct", *control_mode)
 			os.Exit(1)
 		}
-
+		pm, _ := InitPluginManager()
 		map_switch_signal := make(chan bool) //通知虚拟鼠标当前为鼠标还是映射模式
+
 		touchHandler := InitTouchHandler(
 			*configPath,
 			main_events_ch,
@@ -1013,6 +959,7 @@ func main() {
 			u_input_control_ch,
 			map_switch_signal,
 			*measure_sensitivity_mode,
+			pm,
 		)
 		if !global_is_wordking_remote { //只有本机运行的时候 才有必要开启触屏混合
 			go touchHandler.mix_touch(mix_touch_event_ch)
@@ -1062,7 +1009,7 @@ func main() {
 		if *measure_sensitivity_mode {
 			go stdin_control_view_move(touchHandler)
 		}
-		go serve(*port, *configPath, touchHandler.reloadConfigure) //启动服务器
+		go serve(*port, *configPath, touchHandler.reloadConfigure, pm) //启动服务器
 		exitChan := make(chan os.Signal, 1)
 		signal.Notify(exitChan, os.Interrupt, syscall.SIGTERM)
 		<-exitChan

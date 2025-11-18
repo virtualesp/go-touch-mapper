@@ -21,8 +21,6 @@ import (
 	"unsafe"
 )
 
-var plugin_version = "v1.0.0"
-
 /*
 返回插件的配置模板，格式为JSON字符串，支持的配置项类型包括：
 
@@ -40,34 +38,37 @@ select: 选项类型，值为index
 //export Plugin_config_template
 func Plugin_config_template() *C.char {
 	return C.CString(`{
-    "曲线": {
-        "type": "int32",
-        "default": 5,
-        "min": 1,
-        "max": 20,
-        "description": "曲线弯曲度，值越大弯曲度越高"
-    },
-    "随机": {
-        "type": "bool",
-        "default": true,
-        "description": "是否启用随机偏移"
-    },
-    "code": {
-        "type": "string",
-        "default": "KEY_A",
-        "description": "自定义代码片段"
-    },
-    "模式选择": {
-        "type": "select",
-        "default": 0,
-        "values": [
-            "曲线",
-            "直线",
-            "反曲线"
-        ],
-		"description": "模式选择"
-    }
-}`)
+        "数值类型": {
+            "type": "int32",
+            "default": 5,
+            "min": 1,
+            "max": 20,
+            "description": "int32整数，滑块调整，可设置最大最小值"
+        },
+        "开关类型": {
+            "type": "bool",
+            "default": true,
+            "description": "具有true与fals两种状态，传递是bool类型"
+        },
+        "字符串类型": {
+            "type": "string",
+            "default": "KEY_A",
+            "description": "可输入自定义文本"
+        },
+        "选择类型": {
+            "type": "select",
+            "default": 0,
+            "values": [
+                "选项1",
+                "选项2",
+                "选项3",
+                "选项4",
+                "选项5",
+                "选项6"
+            ],
+            "description": "提供固选项以供选择，获取值为选项的下标"
+        }
+    }`)
 }
 
 /*
@@ -88,7 +89,7 @@ func Plugin_ID() *C.char {
 //export Plugin_Init
 func Plugin_Init() *C.char {
 	// init here
-	return C.CString(fmt.Sprintf("Plugin_Init called! version: %s\ngo-touch-mapper-plugin 这是默认插件初始化入口, 用于演示如何编写插件\n里面的函数仅使用最基础的实现", plugin_version))
+	return C.CString(fmt.Sprintf("Plugin_Init called! \ngo-touch-mapper-plugin 这是默认插件初始化入口, 用于演示如何编写插件\n里面的函数仅使用最基础的实现"))
 }
 
 /*
