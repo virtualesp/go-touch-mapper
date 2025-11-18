@@ -329,8 +329,9 @@ func check_dev_type(dev *evdev.Evdev) dev_type {
 	if axis_count >= 4 { //检测轴的数量是否有两个摇杆 可能存在误报
 		if btn_count == 0 { //如果大于4轴，且没有按键，认为是运动传感器
 			return type_motion_sensors
+		} else if btn_count > 8 {
+			return type_joystick //按键大于8个
 		}
-		return type_joystick
 	}
 	return type_unknown
 }
@@ -842,7 +843,7 @@ func main() {
 				if devType == type_touch {
 					logger.Infof("启用触屏混合 %s(/dev/input/event%d)", get_dev_name_by_index(index), index)
 					go touch_dev_reader(mix_touch_event_ch, index)
-					break
+					// break
 				}
 			}
 		}

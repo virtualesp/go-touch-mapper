@@ -938,6 +938,9 @@ func (self *TouchHandler) getStick(stick_name string) (float64, float64) {
 }
 
 func (self *TouchHandler) handel_abs_events(events []*evdev.Event, dev_type dev_type, dev_name string) {
+	LS_MOVED := false
+	var ls_target_x int32
+	var ls_target_y int32
 	for _, event := range events {
 		if dev_type == type_joystick {
 			if jsconfig, ok := self.joystickInfo[dev_name]; ok {
@@ -992,9 +995,9 @@ func (self *TouchHandler) handel_abs_events(events []*evdev.Event, dev_type dev_
 							if self.wheel_shift_enable {
 								wheel_range = self.wheel_shift_range
 							}
-							target_x := self.wheel_init_x + int32(float64(wheel_range)*2*(ls_x-0.5)) //注意这里的X和Y是相反的
-							target_y := self.wheel_init_y + int32(float64(wheel_range)*2*(ls_y-0.5))
-							self.handel_wheel_action(Wheel_action_move, target_x, target_y)
+							ls_target_x = self.wheel_init_x + int32(float64(wheel_range)*2*(ls_x-0.5)) //注意这里的X和Y是相反的
+							ls_target_y = self.wheel_init_y + int32(float64(wheel_range)*2*(ls_y-0.5))
+							LS_MOVED = true
 						}
 					}
 				}
@@ -1025,6 +1028,9 @@ func (self *TouchHandler) handel_abs_events(events []*evdev.Event, dev_type dev_
 
 		}
 
+	}
+	if LS_MOVED {
+		self.handel_wheel_action(Wheel_action_move, ls_target_x, ls_target_y)
 	}
 }
 
