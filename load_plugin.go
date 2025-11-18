@@ -162,6 +162,7 @@ func InitPluginManager() (*PluginManager, error) {
 		logger.Infof("已创建插件默认配置文件:%v", user_config_file_path)
 		os.WriteFile(user_config_file_path, cb, 0644)
 		user_config_bytes = cb
+		user_config = default_config.MustMap()
 	} else {
 		raw, _ := os.ReadFile(user_config_file_path)
 		user_config_bytes = []byte(raw)
