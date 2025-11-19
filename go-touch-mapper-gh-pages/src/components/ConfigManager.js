@@ -1,66 +1,290 @@
-
+import HighlightOffIcon from '@mui/icons-material/HighlightOff';
+import { Button, FormControlLabel, IconButton, Input, Paper, Slider, Switch, Typography } from "@mui/material";
+import FormControl from '@mui/material/FormControl';
+import Grid from '@mui/material/Grid';
+import InputLabel from '@mui/material/InputLabel';
+import MenuItem from '@mui/material/MenuItem';
+import Select from '@mui/material/Select';
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+// import ControlPanel from "./ControlPanel";
 import DraggableContainer from "./DraggableContainer";
 import JoystickListener from "./JoystickListener";
 import * as keyNameMap from "./keynamemap.json";
 
+
 import {
-    WheelShow,
-    ViewShow,
+    UploadButton,
+    UploadButtonJIETU,
+    UploadButton5s,
     FixedIcon,
     GroupFixedIcon,
+    CostumedInput,
+    WheelShow,
+    ViewShow,
 } from "./UIcomponents"
+import { produce } from "immer"
+import FullscreenIcon from '@mui/icons-material/Fullscreen';
 
-import { imageUrlToBase64 } from "../utils/image";
-import { useConfig } from "../hooks/useConfig";
-import OtherSettings from "./configManager/OtherSettings";
-import KeySettingRender from "./configManager/KeySettingRender";
-import { Grid, Paper } from "@mui/material";
+function copyToClipboard(text) {
+    let transfer = document.createElement('input');
+    document.body.appendChild(transfer);
+    transfer.value = text;  // 这里表示想要复制的内容
+    transfer.focus();
+    transfer.select();
+    if (document.execCommand('copy')) {
+        document.execCommand('copy');
+    }
+    transfer.blur();
+    document.body.removeChild(transfer);
+}
+
+
+function imageUrlToBase64(url) {
+    return new Promise((resolve, reject) => {
+        // 1. 创建 Image 对象
+        const img = new Image();
+
+        // 2. 设置跨域处理（如果需要）
+        img.crossOrigin = "Anonymous";
+
+        // 3. 加载图片
+        img.src = url;
+
+        img.onload = () => {
+            // 4. 创建 Canvas 元素
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+
+            // 5. 设置 Canvas 尺寸与图片相同
+            canvas.width = img.width;
+            canvas.height = img.height;
+
+            // 6. 将图片绘制到 Canvas 上
+            ctx.drawImage(img, 0, 0);
+
+            try {
+                // 7. 转换为 Base64 字符串
+                const base64String = canvas.toDataURL('image/png');
+                resolve(base64String);
+            } catch (e) {
+                reject(`转换失败: ${e}`);
+            }
+        };
+
+        img.onerror = (err) => {
+            reject(`图片加载失败: ${err}`);
+        };
+    });
+}
+
+
+async function getImageObjectUrl(src) {
+    try {
+        // 1. 使用fetch获取图片资源
+        const response = await fetch(src);
+
+        // 2. 检查响应状态
+        if (!response.ok) {
+            throw new Error(`图片加载失败，状态码: ${response.status}`);
+        }
+
+        // 3. 获取图片Blob数据
+        const blob = await response.blob();
+
+        // 4. 验证是否为图片类型
+        if (!blob.type.startsWith('image/')) {
+            throw new Error('获取的资源不是图片类型');
+        }
+
+        // 5. 生成并返回Object URL
+        return URL.createObjectURL(blob);
+    } catch (error) {
+        // 6. 错误处理
+        console.error('获取图片URL失败:', error);
+        throw error; // 可选择重新抛出错误或返回fallback URL
+    }
+}
 
 export default function ConfigManager() {
-    const {
-        config,
-        updateConfig,
-        getDisplayValueX,
-        getDisplayValueY,
-        exportJSON,
-        fetchConfig,
-        setConfig,
-    } = useConfig();
+    // 屏幕会自适应旋转方向，始终以观看者左上角为原点，向右为x，向下为y
+    //所有坐标均为浮点数，真实值为数值*对应方向的屏幕尺寸
+    //单向的量，比如轮盘半径，以宽度为标量
+    const [config, setConfig] = useState({
+        "SCREEN": {
+            "SIZE": [
+                3200,
+                1440
+            ]
+        },
+        "MOUSE": {
+            "SWITCH_KEYS": ["KEY_GRAVE"],
+            "POS": [
+                0.52,
+                0.5
+            ],
+            "SPEED": [
+                0.3,
+                0.3
+            ]
+        },
+        "WHEEL": {
+            "POS": [
+                0.17395833333333333,
+                0.7361111111111112
+            ],
+            "RANGE": 0.05,
+            "SHIFT_RANGE": 0.11,
+            "SHIFT_RANGE_ENABLE": true,
+            "SHIFT_RANGE_SWITCH_ENABLE": true,
+            "WASD": [
+                "KEY_W",
+                "KEY_A",
+                "KEY_S",
+                "KEY_D"
+            ]
+        },
+        "KEY_MAPS": {
+            "BTN_LEFT": {
+                "TYPE": "PRESS",
+                "POS": [
+                    0.08333333333333333,
+                    0.49074074074074076
+                ]
+            },
+            "BTN_RIGHT": {
+                "TYPE": "PRESS",
+                "POS": [
+                    0.9307291666666667,
+                    0.5370370370370371
+                ]
+            },
+            "KEY_C": {
+                "TYPE": "PRESS",
+                "POS": [
+                    0.8317708333333333,
+                    0.9305555555555556
+                ]
+            },
+            "KEY_Z": {
+                "TYPE": "PRESS",
+                "POS": [
+                    0.9119791666666667,
+                    0.8807870370370371
+                ]
+            },
+            "KEY_SPACE": {
+                "TYPE": "PRESS",
+                "POS": [
+                    0.9338541666666667,
+                    0.6944444444444444
+                ]
+            },
+            "KEY_F": {
+                "TYPE": "PRESS",
+                "POS": [
+                    0.7046875,
+                    0.6215277777777778
+                ]
+            },
+            "KEY_R": {
+                "TYPE": "PRESS",
+                "POS": [
+                    0.7640625,
+                    0.8206018518518519
+                ]
+            },
+            "KEY_1": {
+                "TYPE": "PRESS",
+                "POS": [
+                    0.44427083333333334,
+                    0.9131944444444444
+                ]
+            },
+            "KEY_2": {
+                "TYPE": "PRESS",
+                "POS": [
+                    0.5223958333333333,
+                    0.9108796296296297
+                ]
+            },
+            "KEY_Q": {
+                "TYPE": "PRESS",
+                "POS": [
+                    0.14114583333333333,
+                    0.4074074074074074
+                ]
+            },
+            "KEY_E": {
+                "TYPE": "PRESS",
+                "POS": [
+                    0.2046875,
+                    0.41782407407407407
+                ]
+            },
+            "KEY_M": {
+                "TYPE": "PRESS",
+                "POS": [
+                    0.12239583333333333,
+                    0.2013888888888889
+                ]
+            },
+            "KEY_TAB": {
+                "TYPE": "PRESS",
+                "POS": [
+                    0.496875,
+                    0.07523148148148148
+                ]
+            }
+        },
+        "IMG": "data:image/webp;base64,UklGRoIiAABXRUJQVlA4WAoAAAAoAAAAfwwAnwUASUNDUMgBAAAAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADZWUDggRiAAAFDMA50BKoAMoAU+MRiMRKIhoRAEACADBLS3cLuwj24D8AAACs3a8XJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtWAAP7/YcP//79pe+0vfaX+vb///TZv02b9Nm/9MWAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEVYSUZGAAAATU0AKgAAAAgABAEAAAQAAAABAAAMgAEBAAQAAAABAAAFoAESAAMAAAABAAEAAIdpAAQAAAABAAAAPgAAAAAAAAAAAAAAAA=="
+    })
 
     const [pluginConfig, setPluginConfig] = useState({})
     const [pluginValue, setPluginValue] = useState({})
     const [exportButtonText, setExportButtonText] = useState("更新配置")
     const [selectKEY, setSelectKEY] = useState(null)
-    const [imgUrl, setImgUrl] = useState(config.IMG);
-    const [imgSize, setImgSize] = useState([1, 1])
 
+    // const [uploadButton, setUploadButton] = useState(true);
+    const [imgUrl, setImgUrl] = useState(config["IMG"]);
+
+    const [imgSize, setImgSize] = useState([1, 1])
+    const getDisplayValueX = useCallback((value) => { return parseInt(value * config["SCREEN"]["SIZE"][0]) }, [config["SCREEN"]["SIZE"]])
+    const getDisplayValueY = useCallback((value) => { return parseInt(value * config["SCREEN"]["SIZE"][1]) }, [config["SCREEN"]["SIZE"]])
     const getPostionValueX = useCallback((value) => { return parseInt(value * imgSize[0]) }, [imgSize])
     const getPostionValueY = useCallback((value) => { return parseInt(value * imgSize[1]) }, [imgSize])
 
     const viewCenterSetting = useRef(false)
     const addingSwitchKey = useRef(false)
+    const [addingSwitchKeyInfoText, setAddingSwitchKeyInfoText] = useState("添加映射切换键")
 
     const handleFileChange = (e) => {
+        // setUploadButton(false);
         const reads = new FileReader();
         reads.readAsDataURL(document.getElementById('fileInput').files[0]);
         reads.onload = async function (e) {
+            // setImgUrl(this.result);
+            // document.body.requestFullscreen();
             const bas64STR = await imageUrlToBase64(this.result)
-            updateConfig(draft => { draft.IMG = bas64STR });
+            setConfig(produce(draft => { draft.IMG = bas64STR }))
             document.body.requestFullscreen();
         };
     }
 
     const getRemoteApiImg = async (url) => {
+        // const objurl = await getImageObjectUrl(url)
+        // setImgUrl(objurl)
+        // document.body.requestFullscreen();
         const bas64STR = await imageUrlToBase64(url)
-        updateConfig(draft => { draft.IMG = bas64STR })
+        setConfig(produce(draft => { draft.IMG = bas64STR }))
         document.body.requestFullscreen();
     }
 
     const imgLoaded = () => {
         setImgSize([document.getElementById("img").width, document.getElementById("img").height])
-        updateConfig(draft => { draft.SCREEN.SIZE = [document.getElementById("img").naturalWidth, document.getElementById("img").naturalHeight] })
+        setConfig(produce(draft => { draft.SCREEN.SIZE = [document.getElementById("img").naturalWidth, document.getElementById("img").naturalHeight] }))
     }
+
+
 
     const handelImgClick = (e) => {
         const rect = document.getElementById("img").getBoundingClientRect()
@@ -71,29 +295,38 @@ export default function ConfigManager() {
             return
         }
         if (viewCenterSetting.current) {
-            updateConfig(draft => {
-                draft.MOUSE.POS = [x, y]
-            })
+            setConfig(produce(draft => {
+                draft.MOUSE.POS = [
+                    x, y
+                ]
+            }))
             viewCenterSetting.current = false
             return
         }
 
+
         if (key !== null) {
             if (key === "REL_WHEEL_UP" || key == "REL_WHEEL_DOWN") {
-                updateConfig(draft => {
+                setConfig(produce(draft => {
                     draft.KEY_MAPS[key] = {
                         "TYPE": "CLICK",
-                        "POS": [x, y],
+                        "POS": [
+                            x,
+                            y
+                        ],
                         "INTERVAL": [18]
                     }
-                })
+                }))
             } else {
-                updateConfig(draft => {
+                setConfig(produce(draft => {
                     draft.KEY_MAPS[key] = {
                         "TYPE": "PRESS",
-                        "POS": [x, y]
+                        "POS": [
+                            x,
+                            y
+                        ]
                     }
-                })
+                }))
             }
             if (["BTN_LEFT", "BTN_MIDDLE", "BTN_RIGHT", "BTN_SIDE", "BTN_EXTRA", "REL_WHEEL_DOWN", "REL_WHEEL_UP"].indexOf(key) !== -1) {
                 setSelectKEY(null)
@@ -557,27 +790,191 @@ export default function ConfigManager() {
                 setAddButtonDisabled(false)
             }
         }
+        useEffect(() => {
+            window.addEventListener('imgOnNoKeyClick', imgClickListener)
+            return () => {
+                window.removeEventListener('imgOnNoKeyClick', imgClickListener)
+            }
+        }, [])
+
+        return <div>
+            <Grid container >
+                <Grid item xs={6}><a>间隔 : </a>
+                    <CostumedInput defaultValue={config.KEY_MAPS[data["KEY"]].INTERVAL[0]} onCommit={(value) => {
+                        setConfig(produce(draft => { draft.KEY_MAPS[data["KEY"]].INTERVAL = [value] }))
+                    }} />
+                    <a> ms </a></Grid>
+                <Grid item xs={6}><Button onClick={readyToAdd} disabled={addButtonDisabled} variant="outlined" sx={{
+                    height: "30px",
+                    width: "105px",
+                }}  >添加关键点</Button></Grid>
+            </Grid>
+            {
+                data["POS_S"].map((pos, index) => <div key={index} style={{ display: "flex" }}>
+                    <a>{index}&emsp;{`(${getDisplayValueX(pos[0])} , ${getDisplayValueY(pos[1])})`}</a>
+                    <IconButton onClick={() => { removeKeyPoint(index) }}>
+                        <HighlightOffIcon />
+                    </IconButton>
+                </div>
+                )
+            }
+        </div>
     }
 
-    const handleExport = async () => {
-        setExportButtonText("配置更新中");
-        const result = await exportJSON();
-        setExportButtonText(result);
-        setTimeout(() => {
-            setExportButtonText("更新配置")
-        }, 1000);
-    };
+
+    const Type_mult_press = ({ data }) => {
+        const waitingForClick = useRef(false)
+        const [addButtonDisabled, setAddButtonDisabled] = useState(false)
+        const readyToAdd = () => { waitingForClick.current = true; setAddButtonDisabled(true) }
+
+        const addKeyPoint = (x, y) => {
+            setConfig(produce(draft => { draft.KEY_MAPS[data["KEY"]].POS_S.push([x, y]) }))
+        }
+
+        const removeKeyPoint = (index) => {
+            setConfig(produce(draft => { draft.KEY_MAPS[data["KEY"]].POS_S.splice(index, 1) }))
+        }
+
+        const imgClickListener = (e) => {
+            if (waitingForClick.current) {
+                console.log("imgClickListener", e.detail);
+                addKeyPoint(e.detail.x, e.detail.y)
+                waitingForClick.current = false;
+                setAddButtonDisabled(false)
+            }
+        }
+        useEffect(() => {
+            window.addEventListener('imgOnNoKeyClick', imgClickListener)
+            return () => {
+                window.removeEventListener('imgOnNoKeyClick', imgClickListener)
+            }
+        }, [])
+
+        return <div>
+            <Grid container >
+                <Grid item xs={6}><Button onClick={readyToAdd} disabled={addButtonDisabled} variant="outlined" sx={{
+                    height: "30px",
+                    width: "105px",
+                }}  >添加触摸点</Button></Grid>
+            </Grid>
+            {
+                data["POS_S"].map((pos, index) => <div key={index} style={{ display: "flex" }}>
+                    <a>{index}&emsp;{`(${getDisplayValueX(pos[0])} , ${getDisplayValueY(pos[1])})`}</a>
+                    <IconButton onClick={() => { removeKeyPoint(index) }}>
+                        <HighlightOffIcon />
+                    </IconButton>
+                </div>
+                )
+            }
+        </div>
+    }
+
+
+
+    const KeySettingRender = ({ data }) => {
+        const isWheel = data["KEY"] === "REL_WHEEL_UP" || data["KEY"] === "REL_WHEEL_DOWN"
+
+
+        const handleChange = (e) => {
+            if (e.target.value === "CLICK") {
+                setConfig(produce(draft => {
+                    if (Object.keys(config["KEY_MAPS"][data["KEY"]]).indexOf("POS") !== -1) {
+                        draft.KEY_MAPS[data["KEY"]] = { "TYPE": "CLICK", "POS": config["KEY_MAPS"][data["KEY"]]["POS"], "INTERVAL": [18] }
+                    } else {
+                        draft.KEY_MAPS[data["KEY"]] = { "TYPE": "CLICK", "POS": [0.4, 0.4], "INTERVAL": [18] }
+                    }
+                }))
+            } else if (e.target.value === "PRESS") {
+                setConfig(produce(draft => {
+                    if (Object.keys(config["KEY_MAPS"][data["KEY"]]).indexOf("POS") !== -1) {
+                        draft.KEY_MAPS[data["KEY"]] = { "TYPE": "PRESS", "POS": config["KEY_MAPS"][data["KEY"]]["POS"] }
+                    } else {
+                        draft.KEY_MAPS[data["KEY"]] = { "TYPE": "PRESS", "POS": [0.4, 0.4] }
+                    }
+                }))
+            } else if (e.target.value === "AUTO_FIRE") {
+                setConfig(produce(draft => {
+                    if (Object.keys(config["KEY_MAPS"][data["KEY"]]).indexOf("POS") !== -1) {
+                        draft.KEY_MAPS[data["KEY"]] = { "TYPE": "AUTO_FIRE", "POS": config["KEY_MAPS"][data["KEY"]]["POS"], "INTERVAL": [18, 20] }
+                    } else {
+                        draft.KEY_MAPS[data["KEY"]] = { "TYPE": "AUTO_FIRE", "POS": [0.4, 0.4], "INTERVAL": [18, 20] }
+                    }
+                }))
+            } else if (e.target.value === "DRAG") {
+                setConfig(produce(draft => {
+                    draft.KEY_MAPS[data["KEY"]] = { "TYPE": "DRAG", "POS_S": [], "INTERVAL": [18] }
+                }))
+            } else if (e.target.value === "MULT_PRESS") {
+                setConfig(produce(draft => {
+                    draft.KEY_MAPS[data["KEY"]] = { "TYPE": "MULT_PRESS", "POS_S": [], }
+                }))
+            }
+        }
+
+        return <Grid
+            container
+            direction="column"
+            padding="10px"
+        >
+            <Grid
+                container
+                direction="row"
+                justifyContent="flex-start"
+                alignItems="center"
+            >
+                {
+                    data["TYPE"] === "PRESS" || data["TYPE"] === "AUTO_FIRE" || data["TYPE"] === "CLICK" ?
+                        <Grid item xs={5}><a>{`${data["KEY"]} : (${getDisplayValueX(data["POS"][0])} , ${getDisplayValueY(data["POS"][1])})`}</a></Grid> :
+                        <Grid item xs={5}><a>{`${data["KEY"]} `}</a></Grid>
+                }
+                <Grid item xs={5}>
+                    <FormControl>
+                        <InputLabel id={`${data["KEY"]}-select`}></InputLabel>
+                        <Select
+                            labelId={`${data["KEY"]}-select-label`}
+                            value={data["TYPE"]}
+                            onChange={handleChange}
+                            sx={{ height: "30px", }}
+                        >
+                            {!isWheel && <MenuItem value={"PRESS"}>同步按下释放</MenuItem>}
+                            <MenuItem value={"CLICK"}>单次点击</MenuItem>
+                            {!isWheel && <MenuItem value={"AUTO_FIRE"}>连发</MenuItem>}
+                            <MenuItem value={"DRAG"}>滑动</MenuItem>
+                            {!isWheel && <MenuItem value={"MULT_PRESS"}>多点触摸</MenuItem>}
+                        </Select>
+                    </FormControl>
+                </Grid>
+                <Grid item xs={2}>
+                    <IconButton onClick={() => {
+                        setConfig(produce(draft => { delete draft.KEY_MAPS[data["KEY"]] }))
+                    }}>
+                        <HighlightOffIcon />
+                    </IconButton>
+                </Grid>
+            </Grid>
+            {data["TYPE"] === "CLICK" ? <Type_click data={data} /> : null}
+            {data["TYPE"] === "AUTO_FIRE" ? <Type_auto_fire data={data} /> : null}
+            {data["TYPE"] === "DRAG" ? <Type_drag data={data} /> : null}
+            {data["TYPE"] === "MULT_PRESS" ? <Type_mult_press data={data} /> : null}
+
+        </Grid>
+    }
+
 
     useEffect(() => {
         document.onkeydown = (e) => {
             if (e.repeat === false && window.stopPreventDefault !== true) {
                 e.preventDefault();
                 if (addingSwitchKey.current) {
-                    updateConfig(draft => {
+                    setConfig(produce(draft => {
                         if (draft.MOUSE.SWITCH_KEYS.indexOf(keyNameMap[e.code.toLowerCase()]) === -1) {
                             draft.MOUSE.SWITCH_KEYS.push(keyNameMap[e.code.toLowerCase()])
+                            setAddingSwitchKeyInfoText("添加映射切换键")
+                        } else {
+                            setAddingSwitchKeyInfoText("已存在，请重新添加")
+
                         }
-                    })
+                    }))
                 } else {
                     setSelectKEY(keyNameMap[e.code.toLowerCase()])
                 }
@@ -845,38 +1242,25 @@ export default function ConfigManager() {
                                         marginLeft: "10px",
                                     }}
                                 >
-                                    <Paper
-                                        sx={{
-                                            width: "370px",
-                                            marginLeft: "10px",
-                                        }}
-                                    >
-                                        <KeySettingRender
-                                            data={{ ...config.KEY_MAPS[keycode], "KEY": keycode }}
-                                            setConfig={setConfig}
-                                            getDisplayValueX={getDisplayValueX}
-                                            getDisplayValueY={getDisplayValueY}
-                                            config={config}
-                                        />
-                                    </Paper>
-                                </Grid>)
-                        }
-                    </Grid>
-                </div>
-            </DraggableContainer>
+                                    <KeySettingRender data={{ ...config["KEY_MAPS"][keycode], "KEY": keycode }} />
+                                </Paper>
+                            </Grid>)
+                    }
+                </Grid>
+            </div>
+        </DraggableContainer>
 
-            {
-                Object.keys(config.KEY_MAPS).map((keycode, index) => <KeyShow key={keycode} data={{ ...config.KEY_MAPS[keycode], "KEY": keycode }} />)
-            }
-            <WheelShow
-                x={getPostionValueX(config.WHEEL.POS[0])}
-                y={getPostionValueY(config.WHEEL.POS[1])}
-                range={getPostionValueX(config.WHEEL.RANGE)}
-                shift_range={config.WHEEL.SHIFT_RANGE_ENABLE ? getPostionValueX(config.WHEEL.SHIFT_RANGE) : 0}
-            />
-            <ViewShow x={getPostionValueX(config.MOUSE.POS[0])} y={getPostionValueY(config.MOUSE.POS[1])} />
-            <input id="fileInput" type="file" style={{ display: "none" }} accept="image/*" onChange={handleFileChange} ></input>
+        {
+            Object.keys(config["KEY_MAPS"]).map((keycode, index) => <KeyShow key={keycode} data={{ ...config["KEY_MAPS"][keycode], "KEY": keycode }} />)
+        }
+        <WheelShow
+            x={getPostionValueX(config["WHEEL"]["POS"][0])}
+            y={getPostionValueY(config["WHEEL"]["POS"][1])}
+            range={getPostionValueX(config["WHEEL"]["RANGE"])}
+            shift_range={config["WHEEL"]["SHIFT_RANGE_ENABLE"] ? getPostionValueX(config["WHEEL"]["SHIFT_RANGE"]) : 0}
+        />
+        <ViewShow x={getPostionValueX(config["MOUSE"]["POS"][0])} y={getPostionValueY(config["MOUSE"]["POS"][1])} />
+        <input id="fileInput" type="file" style={{ display: "none" }} accept="image/*" onChange={handleFileChange} ></input>
 
-        </div>
-    );
+    </div>
 }
