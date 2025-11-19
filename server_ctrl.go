@@ -23,52 +23,31 @@ import (
 var staticFS embed.FS
 
 func convertPNGtoJPEG(pngBytes []byte, quality int) ([]byte, error) {
-	// 解码 PNG
 	srcImg, err := png.Decode(bytes.NewReader(pngBytes))
 	if err != nil {
 		return nil, err
 	}
-
-	// 创建白色背景画布
 	bg := image.NewRGBA(srcImg.Bounds())
 	draw.Draw(bg, bg.Bounds(), &image.Uniform{color.White}, image.Point{}, draw.Src)
-
-	// 将原图绘制到白色背景上
 	draw.Draw(bg, bg.Bounds(), srcImg, srcImg.Bounds().Min, draw.Over)
-
-	// 编码为 JPEG
 	var buf bytes.Buffer
 	if err := jpeg.Encode(&buf, bg, &jpeg.Options{Quality: quality}); err != nil {
 		return nil, err
 	}
-
 	return buf.Bytes(), nil
 }
 
 func screenHandler(w http.ResponseWriter, r *http.Request) {
-	// cmd := exec.Command("screencap", "-p")
-	// cmd.Stdout = w
-	// if err := cmd.Run(); err != nil {
-	// 	http.Error(w, err.Error(), http.StatusInternalServerError)
-	// 	return
-	// }
-	// w.Header().Set("Content-Type", "image/png")
-	// start := time.Now()
 	cmd := exec.Command("screencap", "-p")
 	pngBytes, _ := cmd.Output()
-	// end := time.Since(start)
-	// logger.Infof("cmd use %v", end)
-	// start = time.Now()
 	jpegData, _ := convertPNGtoJPEG(pngBytes, 80)
 	w.Header().Set("Content-Type", "image/jpeg")
 	if _, err := w.Write(jpegData); err != nil {
 		http.Error(w, "Failed to write image", http.StatusInternalServerError)
 	}
-	// end = time.Since(start)
-	// logger.Infof("send use %v", end)
 }
 
-func serve(port int, mapperFilePath string, reloadConfigureFunc func(mapperFilePath string)) {
+func serve(port int, mapperFilePath string, reloadConfigureFunc func(mapperFilePath string), pm *PluginManager) {
 	var configMutex sync.RWMutex
 	webFS, err := fs.Sub(staticFS, "go-touch-mapper-gh-pages/build")
 	if err != nil {
@@ -103,41 +82,56 @@ func serve(port int, mapperFilePath string, reloadConfigureFunc func(mapperFileP
 			http.Error(w, "读取请求体失败", http.StatusBadRequest)
 			return
 		}
-
-		// 验证是否为有效JSON
 		if !json.Valid(body) {
 			http.Error(w, "无效的JSON格式", http.StatusBadRequest)
 			return
 		}
-
 		configMutex.Lock()
 		defer configMutex.Unlock()
 
-		// 备份原配置文件
-		backupPath := mapperFilePath + ".bak"
-		if err := os.Rename(mapperFilePath, backupPath); err != nil {
-			http.Error(w, "创建备份失败", http.StatusInternalServerError)
-			logger.Errorf("配置文件备份失败: %v", err)
-			return
+		var json_data map[string]interface{}
+		if err := json.Unmarshal(body, &json_data); err != nil {
+			w.Write([]byte("JSON无效"))
+			logger.Info("JSON无效")
+		} else {
+			config_json := json_data["config"].(map[string]interface{})
+			plugin_json := json_data["plugin"].(map[string]interface{})
+			config_bytes, _ := json.Marshal(config_json)
+			if err := os.WriteFile(mapperFilePath, config_bytes, 0644); err != nil {
+				http.Error(w, "写入配置文件失败", http.StatusInternalServerError)
+				logger.Errorf("写入配置文件失败: %v", err)
+				return
+			}
+			reloadConfigureFunc(mapperFilePath)
+			pm.update_user_config(plugin_json)
+			w.Write([]byte("配置更新成功"))
+			logger.Info("配置文件已更新并重新加载")
 		}
+	})
 
-		// 写入新配置
-		if err := os.WriteFile(mapperFilePath, body, 0644); err != nil {
-			// 恢复备份
-			os.Rename(backupPath, mapperFilePath)
-			http.Error(w, "写入配置文件失败", http.StatusInternalServerError)
-			logger.Errorf("写入配置文件失败: %v", err)
-			return
+	http.HandleFunc("/plugin/configure/getTemplate", func(w http.ResponseWriter, r *http.Request) {
+		configMutex.RLock()
+		defer configMutex.RUnlock()
+		var content []byte
+		if pm != nil {
+			content = []byte(pm.config_template)
+		} else {
+			content = []byte("{}")
 		}
-
-		// 删除备份
-		os.Remove(backupPath)
-
-		// 重新加载配置
-		reloadConfigureFunc(mapperFilePath)
-
-		w.Write([]byte("配置更新成功"))
-		logger.Info("配置文件已更新并重新加载")
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(content)
+	})
+	http.HandleFunc("/plugin/configure/getConfig", func(w http.ResponseWriter, r *http.Request) {
+		configMutex.RLock()
+		defer configMutex.RUnlock()
+		var content []byte
+		if pm != nil {
+			content, _ = json.Marshal(pm.user_config)
+		} else {
+			content = []byte("{}")
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(content)
 	})
 
 	interfaces, err := net.Interfaces()

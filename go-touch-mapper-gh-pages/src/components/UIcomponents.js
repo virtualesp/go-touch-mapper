@@ -100,7 +100,7 @@ const GroupFixedIcon = ({ pos_s, bgColor, textColor, text }) => {
     </div>
 }
 
-const CostumedInput = ({ defaultValue, width, onCommit }) => {
+const CostumedInput = ({ defaultValue, width, onCommit, all }) => {
     const [value, setValue] = useState(defaultValue)
     return <Input
         sx={{ width: width || "40px" }}
@@ -113,11 +113,11 @@ const CostumedInput = ({ defaultValue, width, onCommit }) => {
         }}
         onBlur={(e) => {
             window.stopPreventDefault = false
-            onCommit && onCommit(Number(value))
+            onCommit && onCommit(all ? value : Number(value))
         }}
         onKeyDown={(e) => {
             if (e.key === "Enter") {
-                onCommit && onCommit(Number(value))
+                onCommit && onCommit(all ? value : Number(value))
             }
         }}
     />
@@ -176,7 +176,7 @@ const ViewShow = ({ x, y }) => {
         <div style={{
             position: 'absolute',
             left: 0,
-            top: y ,
+            top: y,
             width: "100vw",
             height: 1,
             backgroundColor: "#d90051",

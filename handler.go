@@ -64,6 +64,7 @@ type TouchHandler struct {
 	wheel_shift_enable         bool  //启用shift轮盘
 	wheel_shift_switch_enable  bool  //shift轮盘切换 or 长按
 	wheel_shift_range          int32
+	pm                         *PluginManager
 }
 
 const (
@@ -126,6 +127,7 @@ func InitTouchHandler(
 	u_input chan *u_input_control_pack,
 	map_switch_signal chan bool,
 	measure_sensitivity_mode bool,
+	pm *PluginManager,
 ) *TouchHandler {
 	rand.Seed(time.Now().UnixNano())
 
@@ -356,6 +358,7 @@ func InitTouchHandler(
 		wheel_shift_enable:         config_json.Get("WHEEL").Get("SHIFT_RANGE_ENABLE").MustBool(),
 		wheel_shift_switch_enable:  config_json.Get("WHEEL").Get("SHIFT_RANGE_SWITCH_ENABLE").MustBool(),
 		wheel_shift_range:          int32(config_json.Get("WHEEL").Get("SHIFT_RANGE").MustFloat64() * float64(screenSizeX)),
+		pm:                         pm,
 	}
 }
 
@@ -935,68 +938,99 @@ func (self *TouchHandler) getStick(stick_name string) (float64, float64) {
 }
 
 func (self *TouchHandler) handel_abs_events(events []*evdev.Event, dev_type dev_type, dev_name string) {
+	LS_MOVED := false
+	var ls_target_x int32
+	var ls_target_y int32
 	for _, event := range events {
-		if jsconfig, ok := self.joystickInfo[dev_name]; ok && dev_type == type_joystick {
-			abs_info := jsconfig.Get("ABS").Get(strconv.Itoa(int(event.Code)))
-			name := abs_info.Get("name").MustString("")
-			abs_mini := int32(abs_info.Get("range").GetIndex(0).MustInt())
-			abs_max := int32(abs_info.Get("range").GetIndex(1).MustInt())
-			formatted_value := float64(event.Value-abs_mini) / float64(abs_max-abs_mini)
-			_last_value, _ := self.abs_last.Load(name)
-			last_value := _last_value.(float64)
-			if name == "HAT0X" || name == "HAT0Y" {
-				down_up_key := fmt.Sprintf("%s_%s", strconv.FormatFloat(last_value, 'f', 1, 64), strconv.FormatFloat(formatted_value, 'f', 1, 64))
-				self.abs_last.Store(name, formatted_value)
-				direction := HAT_D_U[down_up_key][0]
-				up_down := HAT_D_U[down_up_key][1]
-				translated_name := HAT0_KEY_NAME[name][direction]
-				self.handel_key_up_down(translated_name, up_down, dev_name)
-			} else if name == "LT" || name == "RT" {
-				for i := 0; i < 6; i++ {
-					if last_value < float64(i)/5 && formatted_value >= float64(i)/5 {
-						translated_name := fmt.Sprintf("%s_%d", name, i)
-						self.handel_key_up_down("BTN_"+translated_name, DOWN, dev_name)
-						if i == 1 {
-							self.handel_key_up_down("BTN_"+name, DOWN, dev_name)
+		if dev_type == type_joystick {
+			if jsconfig, ok := self.joystickInfo[dev_name]; ok {
+				abs_info := jsconfig.Get("ABS").Get(strconv.Itoa(int(event.Code)))
+				name := abs_info.Get("name").MustString("")
+				abs_mini := int32(abs_info.Get("range").GetIndex(0).MustInt())
+				abs_max := int32(abs_info.Get("range").GetIndex(1).MustInt())
+				formatted_value := float64(event.Value-abs_mini) / float64(abs_max-abs_mini)
+				_last_value, _ := self.abs_last.Load(name)
+				last_value := _last_value.(float64)
+				if name == "HAT0X" || name == "HAT0Y" {
+					down_up_key := fmt.Sprintf("%s_%s", strconv.FormatFloat(last_value, 'f', 1, 64), strconv.FormatFloat(formatted_value, 'f', 1, 64))
+					self.abs_last.Store(name, formatted_value)
+					direction := HAT_D_U[down_up_key][0]
+					up_down := HAT_D_U[down_up_key][1]
+					translated_name := HAT0_KEY_NAME[name][direction]
+					self.handel_key_up_down(translated_name, up_down, dev_name)
+				} else if name == "LT" || name == "RT" {
+					for i := 0; i < 6; i++ {
+						if last_value < float64(i)/5 && formatted_value >= float64(i)/5 {
+							translated_name := fmt.Sprintf("%s_%d", name, i)
+							self.handel_key_up_down("BTN_"+translated_name, DOWN, dev_name)
+							if i == 1 {
+								self.handel_key_up_down("BTN_"+name, DOWN, dev_name)
+							}
+						} else if last_value >= float64(i)/5 && formatted_value < float64(i)/5 {
+							translated_name := fmt.Sprintf("%s_%d", name, i)
+							self.handel_key_up_down("BTN_"+translated_name, UP, dev_name)
+							if i == 1 {
+								self.handel_key_up_down("BTN_"+name, UP, dev_name)
+							}
 						}
-					} else if last_value >= float64(i)/5 && formatted_value < float64(i)/5 {
-						translated_name := fmt.Sprintf("%s_%d", name, i)
-						self.handel_key_up_down("BTN_"+translated_name, UP, dev_name)
-						if i == 1 {
-							self.handel_key_up_down("BTN_"+name, UP, dev_name)
+					}
+					self.abs_last.Store(name, formatted_value)
+				} else { //必定摇杆
+					if self.using_joystick_name != dev_name {
+						self.using_joystick_name = dev_name
+					}
+					// self.abs_last_set(name, formatted_value)
+					self.abs_last.Store(name, formatted_value)
+					//右摇杆控制视角 只需修改值 有单独线程去处理
+					//左摇杆控制轮盘 且与WASD可同时工作 在这里处理
+					if (name == "LS_X" || name == "LS_Y") && self.map_on {
+						ls_x, ls_y := self.getStick("LS")
+						if ls_x == 0.5 && ls_y == 0.5 {
+							if self.ls_wheel_released == false {
+								self.ls_wheel_released = true
+							}
+						} else {
+							self.ls_wheel_released = false
+							wheel_range := self.wheel_range
+							if self.wheel_shift_enable {
+								wheel_range = self.wheel_shift_range
+							}
+							ls_target_x = self.wheel_init_x + int32(float64(wheel_range)*2*(ls_x-0.5)) //注意这里的X和Y是相反的
+							ls_target_y = self.wheel_init_y + int32(float64(wheel_range)*2*(ls_y-0.5))
+							LS_MOVED = true
 						}
 					}
 				}
-				self.abs_last.Store(name, formatted_value)
-			} else { //必定摇杆
-				if self.using_joystick_name != dev_name {
-					self.using_joystick_name = dev_name
-				}
-				// self.abs_last_set(name, formatted_value)
-				self.abs_last.Store(name, formatted_value)
-				//右摇杆控制视角 只需修改值 有单独线程去处理
-				//左摇杆控制轮盘 且与WASD可同时工作 在这里处理
-				if (name == "LS_X" || name == "LS_Y") && self.map_on {
-					ls_x, ls_y := self.getStick("LS")
-					if ls_x == 0.5 && ls_y == 0.5 {
-						if self.ls_wheel_released == false {
-							self.ls_wheel_released = true
-						}
-					} else {
-						self.ls_wheel_released = false
-						wheel_range := self.wheel_range
-						if self.wheel_shift_enable {
-							wheel_range = self.wheel_shift_range
-						}
-						target_x := self.wheel_init_x + int32(float64(wheel_range)*2*(ls_x-0.5)) //注意这里的X和Y是相反的
-						target_y := self.wheel_init_y + int32(float64(wheel_range)*2*(ls_y-0.5))
-						self.handel_wheel_action(Wheel_action_move, target_x, target_y)
-					}
-				}
+			} else {
+				logger.Warnf("%v config not found", dev_name)
 			}
-		} else {
-			logger.Warnf("%v config not found", dev_name)
+		} else if dev_type == type_motion_sensors {
+			// 手持手柄水平放置桌面上，USB-c口水平向前
+			// 向左为x正
+			// 向下为y正
+			// 向前为z正
+
+			//陀螺仪 重力加速度在每个方向上的分量，可判断手柄在三位空间的姿态
+			// AbsoluteX 重力在x轴的分量
+			// AbsoluteY 重力在y轴的分量
+			// AbsoluteZ 重力在z轴的分量
+
+			//角速度 左手定则：握住对应的轴，拇指指向轴正方向，手柄沿握拳的方向旋转为正
+			// AbsoluteRX 俯仰角 向左为x正
+			// AbsoluteRY 偏航角 向下为y正
+			// AbsoluteRZ 滚转角 向前为z正
+
+			// testType := uint16(evdev.AbsoluteX)
+			// if event.Code == testType {
+			// harfLen := 30
+			// fmt.Print(strings.Repeat("=", harfLen+int(float64(harfLen*int(event.Value))/32768)) + "|" + strings.Repeat("=", harfLen-int(float64(harfLen*int(event.Value))/32768)) + fmt.Sprintf("(%d,%d)", global_motion_sensors_range[dev_name][event.Code][0], global_motion_sensors_range[dev_name][event.Code][1]) + "\r")
+			// }
+
 		}
+
+	}
+	if LS_MOVED {
+		self.handel_wheel_action(Wheel_action_move, ls_target_x, ls_target_y)
 	}
 }
 
@@ -1017,10 +1051,8 @@ func (self *TouchHandler) mix_touch(touch_events chan *event_pack) {
 		case 0: //normal
 			return x, y
 		case 1: //left side down
-			// return y, self.screen_y - x
 			return y, 0x7ffffffe - x
 		case 2: //up side down
-			// return self.screen_y - x, self.screen_x - y
 			return 0x7ffffffe - x, 0x7ffffffe - y
 		case 3: //right side down
 			return 0x7ffffffe - y, x
