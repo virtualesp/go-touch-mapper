@@ -52,6 +52,8 @@ type TouchHandler struct {
 	wasd_wheel_released     bool     //wasd滚轮释放 两个都释放时 轮盘才会释放
 	wasd_wheel_last_x       int32    //wasd滚轮上一次的x坐标
 	wasd_wheel_last_y       int32    //wasd滚轮上一次的y坐标
+	wasd_wheel_target_x     int32    //wasd当前目标位置x
+	wasd_wheel_target_y     int32    //wasd当前目标位置y
 	wasd_up_down_statues    []bool
 	key_action_state_save   sync.Map
 	BTN_SELECT_UP_DOWN      int32
@@ -348,6 +350,8 @@ func InitTouchHandler(
 		wasd_wheel_released:     true,
 		wasd_wheel_last_x:       int32(config_json.Get("WHEEL").Get("POS").GetIndex(0).MustFloat64() * float64(screenSizeX)),
 		wasd_wheel_last_y:       int32(config_json.Get("WHEEL").Get("POS").GetIndex(1).MustFloat64() * float64(screenSizeY)),
+		wasd_wheel_target_x:     int32(config_json.Get("WHEEL").Get("POS").GetIndex(0).MustFloat64() * float64(screenSizeX)),
+		wasd_wheel_target_y:     int32(config_json.Get("WHEEL").Get("POS").GetIndex(1).MustFloat64() * float64(screenSizeY)),
 		wasd_up_down_statues:    make([]bool, 5), //放置wasd的状态与shift启用下，shift的状态
 		key_action_state_save:   sync.Map{},
 		BTN_SELECT_UP_DOWN:      0,
@@ -400,6 +404,8 @@ func (self *TouchHandler) reloadConfigure(mapperFilePath string) {
 	}
 	self.wasd_wheel_last_x = int32(config_json.Get("WHEEL").Get("POS").GetIndex(0).MustFloat64() * float64(screenSizeX))
 	self.wasd_wheel_last_y = int32(config_json.Get("WHEEL").Get("POS").GetIndex(1).MustFloat64() * float64(screenSizeY))
+	self.wasd_wheel_target_x = int32(config_json.Get("WHEEL").Get("POS").GetIndex(0).MustFloat64() * float64(screenSizeX))
+	self.wasd_wheel_target_y = int32(config_json.Get("WHEEL").Get("POS").GetIndex(1).MustFloat64() * float64(screenSizeY))
 	// self.KEYBOARD_SWITCH_KEY_NAME = config_json.Get("MOUSE").Get("SWITCH_KEY").MustString()
 	// self.KEYBOARD_SWITCH_KEY_NAME_S = config_json.Get("MOUSE").Get("SWITCH_KEYS").MustStringArray()
 	self.KEYBOARD_SWITCH_KEY_NAME_S = make(map[string]bool)
@@ -570,7 +576,7 @@ func (self *TouchHandler) handel_wheel_action(action int8, abs_x int32, abs_y in
 	self.wheel_lock.Unlock()
 }
 
-func (self *TouchHandler) get_wasd_now_target() (int32, int32) { //根据wasd当前状态 获取wasd滚轮的目标位置
+func (self *TouchHandler) get_wasd_now_target() (int32, int32, int32, int32) { //根据wasd当前状态 获取wasd滚轮的目标位置
 	var x int32 = 0
 	var y int32 = 0
 	if self.wasd_up_down_statues[0] {
@@ -585,18 +591,16 @@ func (self *TouchHandler) get_wasd_now_target() (int32, int32) { //根据wasd当
 	if self.wasd_up_down_statues[3] {
 		x += 1
 	}
-
 	wheel_range := self.wheel_range
 	if self.wasd_up_down_statues[4] {
 		wheel_range = self.wheel_shift_range
 	}
-
 	if x*y == 0 {
 		// logger.Warnf("%v  %v", self.wheel_init_x+x*wheel_range, self.wheel_init_y+y*wheel_range)
-		return self.wheel_init_x + x*wheel_range, self.wheel_init_y + y*wheel_range
+		return self.wheel_init_x + x*wheel_range, self.wheel_init_y + y*wheel_range, x, y
 	} else {
 		// logger.Warnf("%v  %v", self.wheel_init_x+x*wheel_range*707/1000, self.wheel_init_y+y*wheel_range*707/1000)
-		return self.wheel_init_x + x*wheel_range*707/1000, self.wheel_init_y + y*wheel_range*707/1000
+		return self.wheel_init_x + x*wheel_range*707/1000, self.wheel_init_y + y*wheel_range*707/1000, x, y
 	}
 }
 
@@ -623,17 +627,35 @@ func (self *TouchHandler) loop_handel_wasd_wheel() { //循环处理wasd映射轮
 		case <-global_close_signal:
 			return
 		default:
-			wasd_wheel_target_x, wasd_wheel_target_y := self.get_wasd_now_target() //获取目标位置
-			if self.wheel_init_x == wasd_wheel_target_x && self.wheel_init_y == wasd_wheel_target_y {
+			wasd_wheel_target_x, wasd_wheel_target_y, wasd_x, wasd_y := self.get_wasd_now_target() //获取目标位置
+			if wasd_x == 0 && wasd_y == 0 {
 				self.wasd_wheel_released = true //如果wasd目标位置 等于 wasd轮盘初始位置 则认为轮盘释放
 				self.wasd_wheel_last_x = self.wheel_init_x + rand_offset()
 				self.wasd_wheel_last_y = self.wheel_init_y + rand_offset()
 			} else {
 				self.wasd_wheel_released = false
-				if self.wasd_wheel_last_x != wasd_wheel_target_x || self.wasd_wheel_last_y != wasd_wheel_target_y {
-					self.wasd_wheel_last_x, self.wasd_wheel_last_y = update_wheel_xy(self.wasd_wheel_last_x, self.wasd_wheel_last_y, wasd_wheel_target_x, wasd_wheel_target_y)
-					self.handel_wheel_action(Wheel_action_move, self.wasd_wheel_last_x+rand_offset(), self.wasd_wheel_last_y+rand_offset())
-					// self.handel_wheel_action(Wheel_action_move, self.wasd_wheel_last_x, self.wasd_wheel_last_y)
+				if self.pm == nil {
+					if self.wasd_wheel_last_x != wasd_wheel_target_x || self.wasd_wheel_last_y != wasd_wheel_target_y {
+						self.wasd_wheel_last_x, self.wasd_wheel_last_y = update_wheel_xy(self.wasd_wheel_last_x, self.wasd_wheel_last_y, wasd_wheel_target_x, wasd_wheel_target_y)
+						self.handel_wheel_action(Wheel_action_move, self.wasd_wheel_last_x+rand_offset(), self.wasd_wheel_last_y+rand_offset())
+						// self.handel_wheel_action(Wheel_action_move, self.wasd_wheel_last_x, self.wasd_wheel_last_y)
+					}
+				} else {
+
+					// shift_down := int32(0)
+					// wheel_use_range := self.wheel_range
+					// if self.wasd_up_down_statues[4] {
+					// 	shift_down = int32(1)
+					// 	wheel_use_range = self.wheel_shift_range
+					// }
+					// move_offset_x, move_offset_y := self.pm.get_wheel_move_offset(
+					// 	0, 0, shift_down, wheel_use_range, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+					// )
+					// self.wasd_wheel_last_x += move_offset_x
+					// self.wasd_wheel_last_y += move_offset_y
+					// if move_offset_x != 0 || move_offset_y != 0 {
+					// 	self.handel_wheel_action(Wheel_action_move, self.wasd_wheel_last_x, self.wasd_wheel_last_y)
+					// }
 				}
 			}
 			if self.wheel_id != -1 && self.wasd_wheel_released && self.ls_wheel_released {

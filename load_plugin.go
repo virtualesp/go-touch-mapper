@@ -98,6 +98,14 @@ type PluginManager struct {
 	wheel_args_int32x14   []C.int32_t
 	wheel_output_data     []C.int32_t
 	wheel_output_ptr      *C.int32_t
+
+	state_counter      int32
+	wheel_seed         int32
+	last_wheel_x       int32
+	last_wheel_y       int32
+	last_move_x        int32
+	last_move_y        int32
+	last_shift_pressed int32
 }
 
 func InitPluginManager() (*PluginManager, error) {
@@ -256,8 +264,15 @@ func (pm *PluginManager) get_rand_click_target(target_x int32, target_y int32, s
 	return int32(pm.click_output_data[0]), int32(pm.click_output_data[1])
 }
 
-func (pm *PluginManager) get_wheel_move_offset(wheel_x int32, wheel_y int32, wheel_radius int32, shift_pressed int32, center_x int32, center_y int32, screen_x int32, screen_y int32, now_x int32, now_y int32, last_move_x int32, last_move_y int32, state_counter int32, seed int32,
+func (pm *PluginManager) get_wheel_move_offset(wheel_x int32, wheel_y int32, wheel_radius int32, shift_pressed int32, center_x int32, center_y int32, screen_x int32, screen_y int32, now_x int32, now_y int32,
 ) (int32, int32) {
+	// return 1, 1
+	if wheel_x == pm.last_wheel_x && wheel_y == pm.last_wheel_y && shift_pressed == pm.last_shift_pressed {
+		pm.state_counter += 1
+	} else {
+		pm.state_counter = 0
+		pm.wheel_seed = int32(randIntegerNum(0x7ffffffe))
+	}
 	pm.wheel_args_int32x14[0] = C.int32_t(wheel_x)
 	pm.wheel_args_int32x14[1] = C.int32_t(wheel_y)
 	pm.wheel_args_int32x14[2] = C.int32_t(wheel_radius)
@@ -268,10 +283,10 @@ func (pm *PluginManager) get_wheel_move_offset(wheel_x int32, wheel_y int32, whe
 	pm.wheel_args_int32x14[7] = C.int32_t(screen_y)
 	pm.wheel_args_int32x14[8] = C.int32_t(now_x)
 	pm.wheel_args_int32x14[9] = C.int32_t(now_y)
-	pm.wheel_args_int32x14[10] = C.int32_t(last_move_x)
-	pm.wheel_args_int32x14[11] = C.int32_t(last_move_y)
-	pm.wheel_args_int32x14[12] = C.int32_t(state_counter)
-	pm.wheel_args_int32x14[13] = C.int32_t(seed)
+	pm.wheel_args_int32x14[10] = C.int32_t(pm.last_move_x)
+	pm.wheel_args_int32x14[11] = C.int32_t(pm.last_move_y)
+	pm.wheel_args_int32x14[12] = C.int32_t(pm.state_counter)
+	pm.wheel_args_int32x14[13] = C.int32_t(pm.wheel_seed)
 	C.call_wheel_move(
 		pm.wheel_func_ptr,
 		&pm.wheel_args_int32x14[0],
@@ -280,5 +295,6 @@ func (pm *PluginManager) get_wheel_move_offset(wheel_x int32, wheel_y int32, whe
 		pm.user_config_len,
 		pm.wheel_output_ptr,
 	)
-	return int32(pm.wheel_output_data[0]), int32(pm.wheel_output_data[1])
+	pm.last_move_x, pm.last_move_y = int32(pm.wheel_output_data[0]), int32(pm.wheel_output_data[1])
+	return pm.last_move_x, pm.last_move_y
 }

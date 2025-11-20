@@ -16,10 +16,187 @@ import "C"
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/rand"
 	"time"
 	"unsafe"
 )
+
+var (
+	CurveStrength   float64 = 0.1    // 曲线强度 (0-1之间，0为直线，1为强曲线)
+	JitterIntensity float64 = 0.02   // 抖动强度
+	JitterFrequency float64 = 8.0    // 抖动频率
+	MinPoints       int     = 20     // 最少点数
+	MaxPoints       int     = 100    // 最多点数
+	PointsPerUnit   float64 = 5.0    // 每单位距离的点数
+	EasingType      string  = "quad" // 缓动类型: "quad", "cubic", "sine"
+)
+
+var using_vecs [][]int32
+
+type Point struct {
+	X int32
+	Y int32
+}
+
+// GenerateSwipeDisplacements 生成从起点到终点的位移量数组
+// 返回从起点开始的每次位移到下一个点的坐标差值
+func GenerateSwipeDisplacements(startX, startY, endX, endY int32) [][]int32 {
+	// 将int32转换为float64进行计算
+	sx, sy := float64(startX), float64(startY)
+	ex, ey := float64(endX), float64(endY)
+	dx := ex - sx
+	dy := ey - sy
+	distance := math.Sqrt(dx*dx + dy*dy)
+	// 根据距离确定点数
+	numPoints := int(distance / PointsPerUnit)
+	if numPoints < MinPoints {
+		numPoints = MinPoints
+	}
+	if numPoints > MaxPoints {
+		numPoints = MaxPoints
+	}
+	// 生成绝对坐标点
+	absolutePoints := generateAbsolutePoints(sx, sy, ex, ey, numPoints)
+	// 将绝对坐标转换为位移量
+	return convertToDisplacements(absolutePoints, startX, startY)
+}
+
+// generateAbsolutePoints 生成绝对坐标点
+func generateAbsolutePoints(startX, startY, endX, endY float64, numPoints int) []Point {
+	points := make([]Point, 0, numPoints)
+
+	dx := endX - startX
+	dy := endY - startY
+	distance := math.Sqrt(dx*dx + dy*dy)
+
+	// 初始化随机种子
+	rand.Seed(time.Now().UnixNano())
+
+	// 计算控制点 - 控制曲线的弯曲程度
+	control1X := startX + dx*0.4 + rand.Float64()*distance*CurveStrength*2 - distance*CurveStrength
+	control1Y := startY + dy*0.4 + rand.Float64()*distance*CurveStrength*2 - distance*CurveStrength
+	control2X := startX + dx*0.6 + rand.Float64()*distance*CurveStrength*2 - distance*CurveStrength
+	control2Y := startY + dy*0.6 + rand.Float64()*distance*CurveStrength*2 - distance*CurveStrength
+
+	last_x := int32(0)
+	last_y := int32(0)
+	for i := 0; i < numPoints; i++ {
+		t := float64(i) / float64(numPoints-1)
+		easedT := applyEasing(t)
+		x := cubicBezier(startX, control1X, control2X, endX, easedT)
+		y := cubicBezier(startY, control1Y, control2Y, endY, easedT)
+		if t > 0.15 && t < 0.85 {
+			noise := math.Sin(t*JitterFrequency*math.Pi) * distance * JitterIntensity
+			x += noise * (rand.Float64()*2 - 1)
+			y += noise * (rand.Float64()*2 - 1)
+		}
+		rx := int32(math.Round(x))
+		ry := int32(math.Round(y))
+		if last_x != rx || last_y != ry {
+			last_x = rx
+			last_y = ry
+			points = append(points, Point{
+				X: rx,
+				Y: ry,
+			})
+		}
+
+	}
+
+	return points
+}
+
+// convertToDisplacements 将绝对坐标转换为位移量
+func convertToDisplacements(absolutePoints []Point, startX, startY int32) [][]int32 {
+	if len(absolutePoints) == 0 {
+		return [][]int32{}
+	}
+
+	displacements := make([][]int32, len(absolutePoints))
+
+	// 第一个点的位移是相对于起点的
+	displacements[0] = []int32{
+		absolutePoints[0].X - startX,
+		absolutePoints[0].Y - startY,
+	}
+
+	// 后续点的位移是相对于前一个点的
+	for i := 1; i < len(absolutePoints); i++ {
+		displacements[i] = []int32{
+			absolutePoints[i].X - absolutePoints[i-1].X,
+			absolutePoints[i].Y - absolutePoints[i-1].Y,
+		}
+	}
+
+	return displacements
+}
+
+// cubicBezier 三次贝塞尔曲线计算
+func cubicBezier(p0, p1, p2, p3, t float64) float64 {
+	oneMinusT := 1 - t
+	return oneMinusT*oneMinusT*oneMinusT*p0 +
+		3*oneMinusT*oneMinusT*t*p1 +
+		3*oneMinusT*t*t*p2 +
+		t*t*t*p3
+}
+
+// applyEasing 应用缓动函数
+func applyEasing(t float64) float64 {
+	switch EasingType {
+	case "quad":
+		// 二次缓入缓出
+		if t < 0.5 {
+			return 2 * t * t
+		}
+		return -1 + (4-2*t)*t
+	case "cubic":
+		// 三次缓入缓出
+		if t < 0.5 {
+			return 4 * t * t * t
+		}
+		return 1 - math.Pow(-2*t+2, 3)/2
+	case "sine":
+		// 正弦缓入缓出
+		return -(math.Cos(math.Pi*t) - 1) / 2
+	default:
+		// 默认线性
+		return t
+	}
+}
+
+// PrintDisplacements 打印位移量数组
+func PrintDisplacements(displacements [][]int32) {
+	fmt.Printf("位移量数组 (共%d个点):\n", len(displacements))
+	for i, disp := range displacements {
+		fmt.Printf("  点 %d: [%d, %d]\n", i, disp[0], disp[1])
+	}
+}
+
+// ReconstructPath 从位移量重建路径（用于验证）
+func ReconstructPath(startX, startY int32, displacements [][]int32) []Point {
+	if len(displacements) == 0 {
+		return []Point{}
+	}
+
+	path := make([]Point, len(displacements))
+
+	// 第一个点
+	path[0] = Point{
+		X: startX + displacements[0][0],
+		Y: startY + displacements[0][1],
+	}
+
+	// 后续点
+	for i := 1; i < len(displacements); i++ {
+		path[i] = Point{
+			X: path[i-1].X + displacements[i][0],
+			Y: path[i-1].Y + displacements[i][1],
+		}
+	}
+
+	return path
+}
 
 /*
 返回插件的配置模板，格式为JSON字符串，支持的配置项类型包括：
@@ -88,8 +265,15 @@ func Plugin_ID() *C.char {
 */
 //export Plugin_Init
 func Plugin_Init() *C.char {
-	// init here
-	return C.CString(fmt.Sprintf("Plugin_Init called! \ngo-touch-mapper-plugin 这是默认插件初始化入口, 用于演示如何编写插件\n里面的函数仅使用最基础的实现"))
+	// // init here
+	// startX, startY := int32(100), int32(100)
+	// endX, endY := int32(400), int32(300)
+
+	// fmt.Println("=== 默认参数生成位移量 ===")
+
+	GenerateSwipeDisplacements(0, 0, 100, 100)
+
+	return C.CString(fmt.Sprintf("Plugin_Init called! \ngo-touch-mapper-plugin 这是默认插件初始化入口, 用于演示如何编写插件"))
 }
 
 /*
@@ -142,37 +326,27 @@ func plugin_get_wheel_move_offset(
 	config map[string]interface{}, // 用户配置参数
 ) (int32, int32) {
 	//=======================================================================================================================================
+
 	now := time.Now().UnixNano()
 	fmt.Printf("plugin_get_wheel_move_offset(%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%v),", wheel_x, wheel_y, wheel_radius, shift_pressed, center_x, center_y, screen_x, screen_y, now_x, now_y, last_move_x, last_move_y, state_counter, seed, timestamp, config)
 	fmt.Printf("time used %v ns \n", now-timestamp)
 	target_x := center_x + wheel_x*wheel_radius
 	target_y := center_y + wheel_y*wheel_radius
-	offset_x := target_x - now_x
-	offset_y := target_y - now_y
-	if offset_x == 0 && offset_y == 0 {
-		return 0, 0
-	}
-	var move_x int32 = 0
-	var move_y int32 = 0
 
-	switch {
-	case offset_x > 10:
-		move_x = 10
-	case offset_x < -10:
-		move_x = -10
-	default:
-		move_x = offset_x
+	if state_counter == 0 {
+		using_vecs = GenerateSwipeDisplacements(now_x, now_y, target_x+rand.Int31n(30)-15, target_y+rand.Int31n(30)-15)
+		return using_vecs[0][0], using_vecs[0][1]
+	} else {
+		if state_counter >= int32(len(using_vecs)) {
+			return 0, 0
+			// switch state_counter %  {
+			// case
+			// }
+		} else {
+			return using_vecs[state_counter][0], using_vecs[state_counter][1]
+		}
+
 	}
-	switch {
-	case offset_y > 10:
-		move_y = 10
-	case offset_y < -10:
-		move_y = -10
-	default:
-		move_y = offset_y
-	}
-	return move_x, move_y
-	//=======================================================================================================================================
 }
 
 // =====================================================================================================
