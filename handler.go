@@ -675,7 +675,7 @@ func (self *TouchHandler) loop_handel_wasd_wheel() { //循环处理wasd映射轮
 					if self.wasd_up_down_statues[4] {
 						shift_down = int32(1)
 					}
-					start := time.Now()
+					// start := time.Now()
 					move_target_x, move_target_y := self.pm.get_wheel_move_target(
 						self.wheel_pos_last_x,
 						self.wheel_pos_last_y,
@@ -683,7 +683,8 @@ func (self *TouchHandler) loop_handel_wasd_wheel() { //循环处理wasd映射轮
 						wheel_asix_y,
 						shift_down,
 					)
-					logger.Debugf("using time: %v", time.Since(start))
+					// logger.Debugf("move_target_x: %v, move_target_y: %v", move_target_x, move_target_y)
+					// logger.Debugf("using time: %v", time.Since(start))
 					if self.wheel_pos_last_x != move_target_x || self.wheel_pos_last_y != move_target_y {
 						self.wheel_pos_last_x = move_target_x
 						self.wheel_pos_last_y = move_target_y

@@ -6,40 +6,211 @@ package main
 import (
 	"fmt"
 	"math"
+	"math/rand"
+	"time"
 )
 
 const (
-	PluginID             string = "lty.go-touch-mapper.default-plugin.v0.0.1"
+	DEBUG_ENABLED = true
+)
+
+func DEBUG(msg string) {
+	if DEBUG_ENABLED {
+		fmt.Println(msg)
+	}
+}
+
+func DEBUGF(format string, args ...interface{}) {
+	if DEBUG_ENABLED {
+		fmt.Printf(format+"\n", args...)
+	}
+}
+
+var (
+	CurveStrength   float64 = 0.1    // 曲线强度 (0-1之间，0为直线，1为强曲线)
+	JitterIntensity float64 = 0.3    // 抖动强度
+	JitterFrequency float64 = 8.0    // 抖动频率
+	MinPoints       int     = 3      // 最少点数
+	MaxPoints       int     = 20     // 最多点数
+	PointsPerUnit   float64 = 1.0    // 每单位距离的点数
+	EasingType      string  = "quad" // 缓动类型: "quad", "cubic", "sine"
+)
+
+type Point struct {
+	X int32
+	Y int32
+}
+
+// GenerateSwipeDisplacements 生成从起点到终点的位移量数组
+// 返回从起点开始的每次位移到下一个点的坐标差值
+func GenerateSwipeDisplacements(startX, startY, endX, endY int32) [][]int32 {
+	// 将int32转换为float64进行计算
+	sx, sy := float64(startX), float64(startY)
+	ex, ey := float64(endX), float64(endY)
+	dx := ex - sx
+	dy := ey - sy
+	distance := math.Sqrt(dx*dx + dy*dy)
+	// 根据距离确定点数
+	numPoints := int(distance / PointsPerUnit)
+	if numPoints < MinPoints {
+		numPoints = MinPoints
+	}
+	if numPoints > MaxPoints {
+		numPoints = MaxPoints
+	}
+	// 生成绝对坐标点
+	absolutePoints := generateAbsolutePoints(sx, sy, ex, ey, numPoints)
+	return convertToPosList(absolutePoints, startX, startY)
+}
+
+func convertToPosList(absolutePoints []Point, startX, startY int32) [][]int32 {
+	if len(absolutePoints) == 0 {
+		return [][]int32{}
+	}
+	posList := make([][]int32, 0, len(absolutePoints))
+	for i := range absolutePoints {
+		posList = append(posList, []int32{
+			absolutePoints[i].X,
+			absolutePoints[i].Y,
+		})
+	}
+	return posList
+}
+
+// generateAbsolutePoints 生成绝对坐标点
+func generateAbsolutePoints(startX, startY, endX, endY float64, numPoints int) []Point {
+	points := make([]Point, 0, numPoints)
+
+	dx := endX - startX
+	dy := endY - startY
+	distance := math.Sqrt(dx*dx + dy*dy)
+
+	// 初始化随机种子
+	rand.Seed(time.Now().UnixNano())
+
+	// 计算控制点 - 控制曲线的弯曲程度
+	control1X := startX + dx*0.4 + rand.Float64()*distance*CurveStrength*2 - distance*CurveStrength
+	control1Y := startY + dy*0.4 + rand.Float64()*distance*CurveStrength*2 - distance*CurveStrength
+	control2X := startX + dx*0.6 + rand.Float64()*distance*CurveStrength*2 - distance*CurveStrength
+	control2Y := startY + dy*0.6 + rand.Float64()*distance*CurveStrength*2 - distance*CurveStrength
+
+	last_x := int32(0)
+	last_y := int32(0)
+	for i := 0; i < numPoints; i++ {
+		t := float64(i) / float64(numPoints-1)
+		easedT := applyEasing(t)
+		x := cubicBezier(startX, control1X, control2X, endX, easedT)
+		y := cubicBezier(startY, control1Y, control2Y, endY, easedT)
+		if t > 0.15 && t < 0.85 {
+			noise := math.Sin(t*JitterFrequency*math.Pi) * distance * JitterIntensity
+			x += noise * (rand.Float64()*2 - 1)
+			y += noise * (rand.Float64()*2 - 1)
+		}
+		rx := int32(math.Round(x))
+		ry := int32(math.Round(y))
+		if last_x != rx || last_y != ry {
+			last_x = rx
+			last_y = ry
+			points = append(points, Point{
+				X: rx,
+				Y: ry,
+			})
+		}
+
+	}
+
+	return points
+}
+
+// cubicBezier 三次贝塞尔曲线计算
+func cubicBezier(p0, p1, p2, p3, t float64) float64 {
+	oneMinusT := 1 - t
+	return oneMinusT*oneMinusT*oneMinusT*p0 +
+		3*oneMinusT*oneMinusT*t*p1 +
+		3*oneMinusT*t*t*p2 +
+		t*t*t*p3
+}
+
+// applyEasing 应用缓动函数
+func applyEasing(t float64) float64 {
+	switch EasingType {
+	case "quad":
+		// 二次缓入缓出
+		if t < 0.5 {
+			return 2 * t * t
+		}
+		return -1 + (4-2*t)*t
+	case "cubic":
+		// 三次缓入缓出
+		if t < 0.5 {
+			return 4 * t * t * t
+		}
+		return 1 - math.Pow(-2*t+2, 3)/2
+	case "sine":
+		// 正弦缓入缓出
+		return -(math.Cos(math.Pi*t) - 1) / 2
+	default:
+		// 默认线性
+		return t
+	}
+}
+
+const (
+	PluginID             string = "lty.go-touch-mapper.default-plugin.v0.0.2"
 	PluginConfigTemplate string = `{
-        "数值类型": {
+        "CurveStrength": {
             "type": "int32",
-            "default": 5,
+            "default": 10,
+            "min": 0,
+            "max": 1000,
+            "description": "曲线强度"
+        },
+
+		"JitterIntensity": {
+            "type": "int32",
+            "default": 30,
+            "min": 0,
+            "max": 1000,
+            "description": "抖动强度"
+        },
+
+		"JitterFrequency": {
+            "type": "int32",
+            "default": 8,
             "min": 1,
             "max": 20,
-            "description": "int32整数，滑块调整，可设置最大最小值"
+            "description": "抖动频率"
         },
-        "开关类型": {
-            "type": "bool",
-            "default": true,
-            "description": "具有true与fals两种状态，传递是bool类型"
+		"MinPoints": {
+            "type": "int32",
+            "default": 3,
+            "min": 3,
+            "max": 10,
+            "description": "最少点数"
         },
-        "字符串类型": {
-            "type": "string",
-            "default": "KEY_A",
-            "description": "可输入自定义文本"
+		"MaxPoints": {
+            "type": "int32",
+            "default": 20,
+            "min": 10,
+            "max": 30,
+            "description": "最多点数"
         },
-        "选择类型": {
+		"PointsPerUnit": {
+            "type": "int32",
+            "default": 1,
+            "min": 1,
+            "max": 10,
+            "description": "每单位距离的点数"
+        },
+        "EasingType": {
             "type": "select",
             "default": 0,
             "values": [
-                "选项1",
-                "选项2",
-                "选项3",
-                "选项4",
-                "选项5",
-                "选项6"
+                "quad",
+                "cubic",
+                "sine"
             ],
-            "description": "提供固选项以供选择，获取值为选项的下标"
+            "description": "缓动类型: \"quad\", \"cubic\", \"sine\""
         }
     }`
 )
@@ -72,9 +243,11 @@ type CustomWheel struct {
 	last_wheel_asix_x  int32
 	last_wheel_asix_y  int32
 	last_shift_pressed bool
-	counter            uint32 //记录当xyshift不变的情况下调用的次数
-	target_x           int32  //目标x坐标
-	target_y           int32  //目标y坐标
+	counter            int   //记录当xyshift不变的情况下调用的次数
+	target_x           int32 //目标x坐标
+	target_y           int32 //目标y坐标
+	//=========================================
+	posList [][]int32 //记录移动的路径
 
 }
 
@@ -84,6 +257,15 @@ func initWheel() *CustomWheel {
 
 func (cw *CustomWheel) update_user_config(userConfig map[string]interface{}) {
 	cw.userConfig = userConfig
+	CurveStrength = float64(cw.userConfig["CurveStrength"].(float64)) / 1000
+	JitterIntensity = float64(cw.userConfig["JitterIntensity"].(float64)) / 1000
+	JitterFrequency = float64(cw.userConfig["JitterFrequency"].(float64))
+	MinPoints = int(cw.userConfig["MinPoints"].(float64))
+	MaxPoints = int(cw.userConfig["MaxPoints"].(float64))
+	PointsPerUnit = float64(cw.userConfig["PointsPerUnit"].(float64))
+	EasingType = []string{"quad", "cubic", "sine"}[int(cw.userConfig["EasingType"].(float64))]
+	DEBUGF("CurveStrength: %f, JitterIntensity: %f, JitterFrequency: %f, MinPoints: %d, MaxPoints: %d, PointsPerUnit: %f, EasingType: %s\n", CurveStrength, JitterIntensity, JitterFrequency, MinPoints, MaxPoints, PointsPerUnit, EasingType)
+
 }
 func (cw *CustomWheel) update_wheel_config(wheelRadius, shiftWheelRadius, centerX, center_y, screen_x, screen_y int32) {
 	cw.wheelRadius = wheelRadius
@@ -116,7 +298,9 @@ func (cw *CustomWheel) get_wheel_move_target(wheel_pos_x, wheel_pos_y, wheel_axi
 		} else if cw.target_y > cw.screen_y {
 			cw.target_y = cw.screen_y
 		}
-		fmt.Printf("wheel_pos_x: %d, wheel_pos_y: %d, wheel_axis_x: %d, wheel_asix_y: %d, shift_pressed: %v, usingRadius: %d, target_x: %d, target_y: %d\n", wheel_pos_x, wheel_pos_y, wheel_axis_x, wheel_asix_y, shift_pressed, usingRadius, cw.target_x, cw.target_y)
+		DEBUGF("wheel_pos_x: %d, wheel_pos_y: %d, wheel_axis_x: %d, wheel_asix_y: %d, shift_pressed: %v, usingRadius: %d, target_x: %d, target_y: %d\n", wheel_pos_x, wheel_pos_y, wheel_axis_x, wheel_asix_y, shift_pressed, usingRadius, cw.target_x, cw.target_y)
+		cw.posList = GenerateSwipeDisplacements(wheel_pos_x, wheel_pos_y, cw.target_x, cw.target_y)
+		DEBUGF("posList: %v\n", cw.posList)
 	}
 	cw.last_wheel_asix_x = wheel_axis_x
 	cw.last_wheel_asix_y = wheel_asix_y
@@ -125,11 +309,13 @@ func (cw *CustomWheel) get_wheel_move_target(wheel_pos_x, wheel_pos_y, wheel_axi
 	if wheel_pos_x == cw.target_x && wheel_pos_y == cw.target_y {
 		return wheel_pos_x, wheel_pos_y
 	} else {
-		cw.counter++
-		x, y := update_wheel_xy(wheel_pos_x, wheel_pos_y, cw.target_x, cw.target_y)
-		fmt.Printf("wheel_pos_x: %d, wheel_pos_y: %d, target_x: %d, target_y: %d, x: %d, y: %d\n", wheel_pos_x, wheel_pos_y, cw.target_x, cw.target_y, x, y)
-
-		return x, y
+		if cw.counter >= len(cw.posList)-1 {
+			return cw.target_x, cw.target_y
+		} else {
+			x, y := cw.posList[cw.counter][0], cw.posList[cw.counter][1]
+			DEBUGF("counter: %d, x: %d, y: %d\n", cw.counter, x, y)
+			cw.counter++
+			return x, y
+		}
 	}
-
 }

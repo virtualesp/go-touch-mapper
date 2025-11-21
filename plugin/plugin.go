@@ -118,6 +118,7 @@ func main() {
 				return
 			} else {
 				fmt.Println("用户配置:", userConfig)
+				customWheel.update_user_config(userConfig)
 			}
 		case 0xf2:
 			// fmt.Println("收到 update_wheel_config")
