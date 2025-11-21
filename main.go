@@ -954,10 +954,6 @@ func main() {
 		}
 		pm, _ := InitPluginManager()
 
-		// logger.Errorf("测试")
-		// pm.get_wheel_move_offset(100, 100, 50, 1, 100, 100, 400, 400, 100, 100, 0, 0, 0, 0)
-		// logger.Errorf("测试OK")
-
 		map_switch_signal := make(chan bool) //通知虚拟鼠标当前为鼠标还是映射模式
 
 		touchHandler := InitTouchHandler(

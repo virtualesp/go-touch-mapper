@@ -50,8 +50,8 @@ type TouchHandler struct {
 	using_joystick_name     string   //当前正在使用的手柄 针对不同手柄死区不同 但程序支持同时插入多个手柄 因此会识别最进发送事件的手柄作为死区配置
 	ls_wheel_released       bool     //左摇杆滚轮释放
 	wasd_wheel_released     bool     //wasd滚轮释放 两个都释放时 轮盘才会释放
-	wasd_wheel_last_x       int32    //wasd滚轮上一次的x坐标
-	wasd_wheel_last_y       int32    //wasd滚轮上一次的y坐标
+	wheel_pos_last_x        int32    //wasd滚轮上一次的x坐标
+	wheel_pos_last_y        int32    //wasd滚轮上一次的y坐标
 	wasd_wheel_target_x     int32    //wasd当前目标位置x
 	wasd_wheel_target_y     int32    //wasd当前目标位置y
 	wasd_up_down_statues    []bool
@@ -305,6 +305,20 @@ func InitTouchHandler(
 			logger.Warnf("映射配置文件中有空的键盘切换按键,请检查配置文件")
 		}
 	}
+	if pm != nil {
+		var shift_range int32 = int32(config_json.Get("WHEEL").Get("RANGE").MustFloat64() * float64(screenSizeX))
+		if config_json.Get("WHEEL").Get("SHIFT_RANGE_ENABLE").MustBool() == true {
+			shift_range = int32(config_json.Get("WHEEL").Get("SHIFT_RANGE").MustFloat64() * float64(screenSizeX))
+		}
+		pm.update_wheel_config(
+			int32(config_json.Get("WHEEL").Get("RANGE").MustFloat64()*float64(screenSizeX)),
+			shift_range,
+			int32(config_json.Get("WHEEL").Get("POS").GetIndex(0).MustFloat64()*float64(screenSizeX)),
+			int32(config_json.Get("WHEEL").Get("POS").GetIndex(1).MustFloat64()*float64(screenSizeY)),
+			int32(screenSizeX),
+			int32(screenSizeY),
+		)
+	}
 
 	return &TouchHandler{
 		events:             events,
@@ -348,8 +362,8 @@ func InitTouchHandler(
 		using_joystick_name:     "",
 		ls_wheel_released:       true,
 		wasd_wheel_released:     true,
-		wasd_wheel_last_x:       int32(config_json.Get("WHEEL").Get("POS").GetIndex(0).MustFloat64() * float64(screenSizeX)),
-		wasd_wheel_last_y:       int32(config_json.Get("WHEEL").Get("POS").GetIndex(1).MustFloat64() * float64(screenSizeY)),
+		wheel_pos_last_x:        int32(config_json.Get("WHEEL").Get("POS").GetIndex(0).MustFloat64() * float64(screenSizeX)),
+		wheel_pos_last_y:        int32(config_json.Get("WHEEL").Get("POS").GetIndex(1).MustFloat64() * float64(screenSizeY)),
 		wasd_wheel_target_x:     int32(config_json.Get("WHEEL").Get("POS").GetIndex(0).MustFloat64() * float64(screenSizeX)),
 		wasd_wheel_target_y:     int32(config_json.Get("WHEEL").Get("POS").GetIndex(1).MustFloat64() * float64(screenSizeY)),
 		wasd_up_down_statues:    make([]bool, 5), //放置wasd的状态与shift启用下，shift的状态
@@ -402,8 +416,8 @@ func (self *TouchHandler) reloadConfigure(mapperFilePath string) {
 		config_json.Get("WHEEL").Get("WASD").GetIndex(2).MustString(),
 		config_json.Get("WHEEL").Get("WASD").GetIndex(3).MustString(),
 	}
-	self.wasd_wheel_last_x = int32(config_json.Get("WHEEL").Get("POS").GetIndex(0).MustFloat64() * float64(screenSizeX))
-	self.wasd_wheel_last_y = int32(config_json.Get("WHEEL").Get("POS").GetIndex(1).MustFloat64() * float64(screenSizeY))
+	self.wheel_pos_last_x = int32(config_json.Get("WHEEL").Get("POS").GetIndex(0).MustFloat64() * float64(screenSizeX))
+	self.wheel_pos_last_y = int32(config_json.Get("WHEEL").Get("POS").GetIndex(1).MustFloat64() * float64(screenSizeY))
 	self.wasd_wheel_target_x = int32(config_json.Get("WHEEL").Get("POS").GetIndex(0).MustFloat64() * float64(screenSizeX))
 	self.wasd_wheel_target_y = int32(config_json.Get("WHEEL").Get("POS").GetIndex(1).MustFloat64() * float64(screenSizeY))
 	// self.KEYBOARD_SWITCH_KEY_NAME = config_json.Get("MOUSE").Get("SWITCH_KEY").MustString()
@@ -419,6 +433,22 @@ func (self *TouchHandler) reloadConfigure(mapperFilePath string) {
 
 	self.wheel_shift_enable = config_json.Get("WHEEL").Get("SHIFT_RANGE_ENABLE").MustBool()
 	self.wheel_shift_range = int32(config_json.Get("WHEEL").Get("SHIFT_RANGE").MustFloat64() * float64(screenSizeX))
+
+	if self.pm != nil {
+		var shift_range int32 = int32(config_json.Get("WHEEL").Get("RANGE").MustFloat64() * float64(screenSizeX))
+		if config_json.Get("WHEEL").Get("SHIFT_RANGE_ENABLE").MustBool() == true {
+			shift_range = int32(config_json.Get("WHEEL").Get("SHIFT_RANGE").MustFloat64() * float64(screenSizeX))
+		}
+		self.pm.update_wheel_config(
+			int32(config_json.Get("WHEEL").Get("RANGE").MustFloat64()*float64(screenSizeX)),
+			shift_range,
+			int32(config_json.Get("WHEEL").Get("POS").GetIndex(0).MustFloat64()*float64(screenSizeX)),
+			int32(config_json.Get("WHEEL").Get("POS").GetIndex(1).MustFloat64()*float64(screenSizeY)),
+			int32(screenSizeX),
+			int32(screenSizeY),
+		)
+	}
+
 }
 
 func (self *TouchHandler) get_scaled_pos(x int32, y int32) (int32, int32) {
@@ -627,35 +657,39 @@ func (self *TouchHandler) loop_handel_wasd_wheel() { //循环处理wasd映射轮
 		case <-global_close_signal:
 			return
 		default:
-			wasd_wheel_target_x, wasd_wheel_target_y, wasd_x, wasd_y := self.get_wasd_now_target() //获取目标位置
-			if wasd_x == 0 && wasd_y == 0 {
+			wasd_wheel_target_x, wasd_wheel_target_y, wheel_asix_x, wheel_asix_y := self.get_wasd_now_target() //获取目标位置
+			if wheel_asix_x == 0 && wheel_asix_y == 0 {
 				self.wasd_wheel_released = true //如果wasd目标位置 等于 wasd轮盘初始位置 则认为轮盘释放
-				self.wasd_wheel_last_x = self.wheel_init_x + rand_offset()
-				self.wasd_wheel_last_y = self.wheel_init_y + rand_offset()
+				self.wheel_pos_last_x = self.wheel_init_x + rand_offset()
+				self.wheel_pos_last_y = self.wheel_init_y + rand_offset()
 			} else {
 				self.wasd_wheel_released = false
 				if self.pm == nil {
-					if self.wasd_wheel_last_x != wasd_wheel_target_x || self.wasd_wheel_last_y != wasd_wheel_target_y {
-						self.wasd_wheel_last_x, self.wasd_wheel_last_y = update_wheel_xy(self.wasd_wheel_last_x, self.wasd_wheel_last_y, wasd_wheel_target_x, wasd_wheel_target_y)
-						self.handel_wheel_action(Wheel_action_move, self.wasd_wheel_last_x+rand_offset(), self.wasd_wheel_last_y+rand_offset())
+					if self.wheel_pos_last_x != wasd_wheel_target_x || self.wheel_pos_last_y != wasd_wheel_target_y {
+						self.wheel_pos_last_x, self.wheel_pos_last_y = update_wheel_xy(self.wheel_pos_last_x, self.wheel_pos_last_y, wasd_wheel_target_x, wasd_wheel_target_y)
+						self.handel_wheel_action(Wheel_action_move, self.wheel_pos_last_x+rand_offset(), self.wheel_pos_last_y+rand_offset())
 						// self.handel_wheel_action(Wheel_action_move, self.wasd_wheel_last_x, self.wasd_wheel_last_y)
 					}
 				} else {
+					shift_down := int32(0)
+					if self.wasd_up_down_statues[4] {
+						shift_down = int32(1)
+					}
+					start := time.Now()
+					move_target_x, move_target_y := self.pm.get_wheel_move_target(
+						self.wheel_pos_last_x,
+						self.wheel_pos_last_y,
+						wheel_asix_x,
+						wheel_asix_y,
+						shift_down,
+					)
+					logger.Debugf("using time: %v", time.Since(start))
+					if self.wheel_pos_last_x != move_target_x || self.wheel_pos_last_y != move_target_y {
+						self.wheel_pos_last_x = move_target_x
+						self.wheel_pos_last_y = move_target_y
+						self.handel_wheel_action(Wheel_action_move, self.wheel_pos_last_x, self.wheel_pos_last_y)
+					}
 
-					// shift_down := int32(0)
-					// wheel_use_range := self.wheel_range
-					// if self.wasd_up_down_statues[4] {
-					// 	shift_down = int32(1)
-					// 	wheel_use_range = self.wheel_shift_range
-					// }
-					// move_offset_x, move_offset_y := self.pm.get_wheel_move_offset(
-					// 	0, 0, shift_down, wheel_use_range, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-					// )
-					// self.wasd_wheel_last_x += move_offset_x
-					// self.wasd_wheel_last_y += move_offset_y
-					// if move_offset_x != 0 || move_offset_y != 0 {
-					// 	self.handel_wheel_action(Wheel_action_move, self.wasd_wheel_last_x, self.wasd_wheel_last_y)
-					// }
 				}
 			}
 			if self.wheel_id != -1 && self.wasd_wheel_released && self.ls_wheel_released {
