@@ -278,6 +278,7 @@ func (cw *CustomWheel) update_wheel_config(wheelRadius, shiftWheelRadius, center
 
 func (cw *CustomWheel) get_wheel_move_target(wheel_pos_x, wheel_pos_y, wheel_axis_x, wheel_asix_y int32, shift_pressed bool) (int32, int32) {
 	if cw.last_wheel_asix_x != wheel_axis_x || cw.last_wheel_asix_y != wheel_asix_y || cw.last_shift_pressed != shift_pressed {
+		rand.Seed(time.Now().UnixNano())
 		cw.counter = 0
 		usingRadius := cw.wheelRadius
 		if shift_pressed {
@@ -286,8 +287,8 @@ func (cw *CustomWheel) get_wheel_move_target(wheel_pos_x, wheel_pos_y, wheel_axi
 		if wheel_axis_x*wheel_asix_y != 0 {
 			usingRadius = usingRadius * 707 / 1000
 		}
-		cw.target_x = cw.centerX + wheel_axis_x*usingRadius
-		cw.target_y = cw.center_y + wheel_asix_y*usingRadius
+		cw.target_x = cw.centerX + wheel_axis_x*usingRadius + int32(rand.Float64()*CurveStrength)
+		cw.target_y = cw.center_y + wheel_asix_y*usingRadius + int32(rand.Float64()*CurveStrength)
 		if cw.target_x < 0 {
 			cw.target_x = 0
 		} else if cw.target_x > cw.screen_x {

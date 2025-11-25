@@ -61,8 +61,3 @@ jobs:
         files: |
           go-touch-mapper_amd64
           go-touch-mapper_arm64
-
-    - name: upload to mirror
-      run: |
-        curl -T "go-touch-mapper_amd64" -u "${{ secrets.WEBDAV_USERNAME }}:${{ secrets.WEBDAV_PASSWORD }}"  "${{ secrets.WEBDAV_ENDPOINT }}/build/go-touch-mapper_amd64"
-        curl -T "go-touch-mapper_arm64" -u "${{ secrets.WEBDAV_USERNAME }}:${{ secrets.WEBDAV_PASSWORD }}"  "${{ secrets.WEBDAV_ENDPOINT }}/build/go-touch-mapper_arm64"

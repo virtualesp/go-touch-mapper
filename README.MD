@@ -269,6 +269,23 @@ python remote_control.py
 ./go-touch-mapper -s 127.0.0.1
 ```
 
+## 插件系统
+目前开放了wasd映射轮盘的接口
+
+编辑plugin/custom_plugin.go，实现自己的逻辑，然后编译
+
+```
+cd plugin
+CGO_ENABLED=0 GOOS=linux GOARCH=arm64  go build -ldflags="-s -w" -tags plugin -o plugin.bin
+```
+将获得的plugin.bin放在同目录下即可调用
+
+PluginID用于指定配置文件ID，会创建pluginconfig/${pluginconfig}.json文件存储插件参数
+
+PluginConfigTemplate指定插件需要的参数，会显示在web配置界面
+
+
+
 
 ## ADB 下载
 
