@@ -50,7 +50,6 @@ func writeInt32List(writer *bufio.Writer, list []int32) error {
 	for i, v := range list {
 		binary.LittleEndian.PutUint32(buffer[4+i*4:], uint32(v))
 	}
-	fmt.Printf("!!!!!!!!!!!!writeInt32List: %v\n", list)
 	writer.Write(buffer)
 	return writer.Flush()
 }

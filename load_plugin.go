@@ -71,11 +71,12 @@ func readInt32List(reader *bufio.Reader) ([]int32, error) {
 }
 
 type PluginManager struct {
-	id              string
-	config_template string
-	user_config     map[string]interface{}
-	writer          *bufio.Writer
-	reader          *bufio.Reader
+	id                    string
+	config_template       string
+	user_config           map[string]interface{}
+	user_config_file_path string
+	writer                *bufio.Writer
+	reader                *bufio.Reader
 }
 
 func InitPluginManager() (*PluginManager, error) {
@@ -176,11 +177,12 @@ func InitPluginManager() (*PluginManager, error) {
 	logger.Infof("插件用户配置: %s", userConfigString)
 	writeString(writer, userConfigString)
 	return &PluginManager{
-		id:              plugin_id,
-		config_template: config_template,
-		user_config:     user_config,
-		writer:          writer,
-		reader:          reader,
+		id:                    plugin_id,
+		config_template:       config_template,
+		user_config:           user_config,
+		user_config_file_path: user_config_file_path,
+		writer:                writer,
+		reader:                reader,
 	}, nil
 }
 
@@ -189,6 +191,13 @@ func (pm *PluginManager) update_user_config(config map[string]interface{}) {
 	config_string := string(config_bytes)
 	pm.writer.WriteByte(0xf1)
 	writeString(pm.writer, config_string)
+	cb, err := json.Marshal(config)
+	if err != nil {
+		logger.Errorf("插件用户配置序列化失败: %v", err)
+		return
+	}
+	os.WriteFile(pm.user_config_file_path, cb, 0644)
+	logger.Infof("已更新插件配置文件:%v", pm.user_config_file_path)
 	logger.Infof("插件用户配置更新: %v", config)
 }
 

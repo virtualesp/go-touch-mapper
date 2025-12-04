@@ -150,27 +150,12 @@ func touch_dev_reader(event_reader chan *event_pack, index int) {
 
 func udp_event_injector(ch chan *event_pack, port int) {
 	time.Sleep(time.Duration(200) * time.Millisecond)
-	listen, err := net.ListenUDP("udp", &net.UDPAddr{
-		IP:   net.IPv4(0, 0, 0, 0),
-		Port: port,
-	})
+	conn, err := CreateUDPReader(fmt.Sprintf("0.0.0.0:%d", port))
 	if err != nil {
-		logger.Errorf("udp error : %v", err)
+		logger.Errorf("ERROR:%v", err)
 		return
 	}
-	defer listen.Close()
-
-	recv_ch := make(chan []byte)
-	go func() {
-		for {
-			var buf [1024]byte
-			n, _, err := listen.ReadFromUDP(buf[:])
-			if err != nil {
-				break
-			}
-			recv_ch <- buf[:n]
-		}
-	}()
+	recv_ch := conn.ReadChan()
 	logger.Infof("已准备从以下地址接收远程事件: ")
 	interfaces, err := net.Interfaces()
 	if err != nil {
@@ -203,9 +188,6 @@ func udp_event_injector(ch chan *event_pack, port int) {
 		case <-global_close_signal:
 			return
 		case pack := <-recv_ch: //数据包格式：<event_count:1byte><event1:8byte><event2:8byte>...<eventN:8byte><dev_type:1byte><dev_name:N byte>
-			//每个event格式：<type:2byte><code:2byte><value:4byte>
-			//共8byte
-			// logger.Debugf("%v", pack)
 			event_count := int(pack[0])
 			events := make([]*evdev.Event, 0)
 			for i := 0; i < event_count; i++ {
@@ -214,7 +196,6 @@ func udp_event_injector(ch chan *event_pack, port int) {
 					Code:  uint16(binary.LittleEndian.Uint16(pack[8*i+3 : 8*i+5])),
 					Value: int32(binary.LittleEndian.Uint32(pack[8*i+5 : 8*i+9])),
 				}
-				// logger.Debugf("%v", event)
 				events = append(events, event)
 			}
 			e_pack := &event_pack{
@@ -223,7 +204,40 @@ func udp_event_injector(ch chan *event_pack, port int) {
 				events:   events,
 			}
 			ch <- e_pack
-			// logger.Debugf("接收到事件 : %v", e_pack)
+		}
+	}
+}
+
+func uds_event_injector(ch chan *event_pack, address string) {
+	time.Sleep(time.Duration(200) * time.Millisecond)
+	conn, err := CreateUDSReader(address)
+	if err != nil {
+		logger.Errorf("ERROR:%v", err)
+		return
+	}
+	recv_ch := conn.ReadChan()
+	logger.Infof("已准备从 UDS:[%s] 接收远程事件", address)
+	for {
+		select {
+		case <-global_close_signal:
+			return
+		case pack := <-recv_ch: //数据包格式：<event_count:1byte><event1:8byte><event2:8byte>...<eventN:8byte><dev_type:1byte><dev_name:N byte>
+			event_count := int(pack[0])
+			events := make([]*evdev.Event, 0)
+			for i := 0; i < event_count; i++ {
+				event := &evdev.Event{
+					Type:  evdev.EventType(uint16(binary.LittleEndian.Uint16(pack[8*i+1 : 8*i+3]))),
+					Code:  uint16(binary.LittleEndian.Uint16(pack[8*i+3 : 8*i+5])),
+					Value: int32(binary.LittleEndian.Uint32(pack[8*i+5 : 8*i+9])),
+				}
+				events = append(events, event)
+			}
+			e_pack := &event_pack{
+				dev_name: string(pack[event_count*8+2:]),
+				dev_type: dev_type(pack[event_count*8+1]),
+				events:   events,
+			}
+			ch <- e_pack
 		}
 	}
 }
@@ -646,13 +660,19 @@ func main() {
 	var using_remote_control *bool = parser.Flag("r", "remote-control", &argparse.Options{
 		Required: false,
 		Default:  false,
-		Help:     "是否从UDP接收远程事件",
+		Help:     "是否从UDP/uds接收远程事件",
 	})
 
 	var port *int = parser.Int("p", "port", &argparse.Options{
 		Required: false,
 		Help:     "指定监听远程事件的UDP端口号与控制后台端口",
 		Default:  61069,
+	})
+
+	var uds_address *string = parser.String("", "uds", &argparse.Options{
+		Required: false,
+		Default:  "@uds_mouse_keyboard_event_socket",
+		Help:     "监听的uds地址,默认@uds_mouse_keyboard_event_socket",
 	})
 
 	var using_v_mouse *bool = parser.Flag("v", "v-mouse", &argparse.Options{
@@ -701,8 +721,6 @@ func main() {
 		logger.WithDebug()
 		logger.Debug("debug on")
 	}
-	//=====================================================================================================================================
-
 	//=====================================================================================================================================
 	if *create_js_info {
 		//=================================================================================================================================
@@ -1008,6 +1026,7 @@ func main() {
 
 		if *using_remote_control {
 			go udp_event_injector(main_events_ch, *port)
+			go uds_event_injector(main_events_ch, *uds_address)
 		}
 
 		if *measure_sensitivity_mode {
