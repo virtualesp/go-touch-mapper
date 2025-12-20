@@ -555,7 +555,7 @@ func auto_detect_and_read(event_chan chan *event_pack, patern string) {
 					continue
 				}
 				if devType == type_mouse || devType == type_keyboard || devType == type_joystick || devType == type_motion_sensors {
-					logger.Infof("检测到设备 %s(/dev/input/event%d) : %s", devName, index, devTypeFriendlyName[devType])
+					logger.Debugf("检测到设备 %s(/dev/input/event%d) : %s", devName, index, devTypeFriendlyName[devType])
 					localIndex := index
 					go func() {
 						devices[localIndex] = true
@@ -732,18 +732,6 @@ func main() {
 		//=================================================================================================================================
 		// 创建手柄配置文件部分
 		auto_detect_result := get_possible_device_indexes(make(map[int]bool))
-		devTypeFriendlyName := map[dev_type]string{
-			type_mouse:          "鼠标",
-			type_keyboard:       "键盘",
-			type_joystick:       "手柄",
-			type_touch:          "触屏",
-			type_motion_sensors: "运动传感器",
-			type_unknown:        "未知",
-		}
-		for index, devType := range auto_detect_result {
-			devName := get_dev_name_by_index(index)
-			logger.Infof("检测到设备 %s(/dev/input/event%d) : %s", devName, index, devTypeFriendlyName[devType])
-		}
 		js_events := make([]int, 0)
 		for index, devType := range auto_detect_result {
 			if devType == type_joystick {
@@ -754,9 +742,21 @@ func main() {
 			create_js_info_file(js_events[0])
 		} else {
 			if len(js_events) == 0 {
-				logger.Warn("未检测到手柄")
+				logger.Error("未检测到手柄")
 			} else {
-				logger.Warn("检测到多个手柄,断开其他手柄的连接")
+				logger.Infof("检测到多个手柄")
+				for index, EventIndex := range js_events {
+					devName := get_dev_name_by_index(EventIndex)
+					logger.Infof("[%d] %s (/dev/input/event%d)", index, devName, EventIndex)
+				}
+				logger.Infof("请输入要创建配置文件的手柄索引")
+				var js_index int
+				fmt.Scanln(&js_index)
+				if js_index < 0 || js_index >= len(js_events) {
+					logger.Errorf("输入的手柄索引 %d 无效", js_index)
+					return
+				}
+				create_js_info_file(js_events[js_index])
 			}
 		}
 		return
