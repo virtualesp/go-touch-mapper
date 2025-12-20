@@ -47,67 +47,91 @@ func handel_touch_using_direct_touch(index int) touch_control_func {
 		<-global_close_signal
 		fd.Close()
 	}()
-	require_init := makeEventsMMap(6 * 24)
-	require := makeEventsMMap(5 * 24)
 
-	release := makeEventsMMap(2 * 24)
-	switch_release := makeEventsMMap(3 * 24)
-	switch_release_btnup := makeEventsMMap(4 * 24)
-	release_btnup := makeEventsMMap(3 * 24)
+	require_init := getEventsMMap([]evdev.Event{
+		{Type: EV_ABS, Code: ABS_MT_SLOT, Value: 0},
+		{Type: EV_ABS, Code: ABS_MT_TRACKING_ID, Value: 0},
+		{Type: EV_ABS, Code: ABS_MT_POSITION_X, Value: 0},
+		{Type: EV_ABS, Code: ABS_MT_POSITION_Y, Value: 0},
+		{Type: EV_ABS, Code: ABS_MT_TOUCH_MAJOR, Value: 4},
+		{Type: EV_ABS, Code: ABS_MT_PRESSURE, Value: 1},
+		{Type: EV_KEY, Code: BTN_TOUCH, Value: DOWN},
+		{Type: EV_SYN, Code: 0, Value: 0},
+	})
 
-	switch_move := makeEventsMMap(4 * 24)
-	move := makeEventsMMap(3 * 24)
+	require := getEventsMMap([]evdev.Event{
+		{Type: EV_ABS, Code: ABS_MT_SLOT, Value: 0},
+		{Type: EV_ABS, Code: ABS_MT_TRACKING_ID, Value: 0},
+		{Type: EV_ABS, Code: ABS_MT_POSITION_X, Value: 0},
+		{Type: EV_ABS, Code: ABS_MT_POSITION_Y, Value: 0},
+		{Type: EV_ABS, Code: ABS_MT_TOUCH_MAJOR, Value: 4},
+		{Type: EV_ABS, Code: ABS_MT_PRESSURE, Value: 1},
+		{Type: EV_SYN, Code: 0, Value: 0},
+	})
 
-	require_init.Events[0] = evdev.Event{Type: EV_ABS, Code: ABS_MT_SLOT, Value: 0}
-	require_init.Events[1] = evdev.Event{Type: EV_ABS, Code: ABS_MT_TRACKING_ID, Value: 0}
-	require_init.Events[2] = evdev.Event{Type: EV_KEY, Code: BTN_TOUCH, Value: DOWN}
-	require_init.Events[3] = evdev.Event{Type: EV_ABS, Code: ABS_MT_POSITION_X, Value: 0}
-	require_init.Events[4] = evdev.Event{Type: EV_ABS, Code: ABS_MT_POSITION_Y, Value: 0}
-	require_init.Events[5] = evdev.Event{Type: EV_SYN, Code: 0, Value: 0}
+	release := getEventsMMap([]evdev.Event{
+		{Type: EV_ABS, Code: ABS_MT_TOUCH_MAJOR, Value: 0},
+		{Type: EV_ABS, Code: ABS_MT_PRESSURE, Value: 0},
+		{Type: EV_ABS, Code: ABS_MT_TRACKING_ID, Value: -1},
+		{Type: EV_SYN, Code: 0, Value: 0},
+	})
 
-	require.Events[0] = evdev.Event{Type: EV_ABS, Code: ABS_MT_SLOT, Value: 0}
-	require.Events[1] = evdev.Event{Type: EV_ABS, Code: ABS_MT_TRACKING_ID, Value: 0}
-	require.Events[2] = evdev.Event{Type: EV_ABS, Code: ABS_MT_POSITION_X, Value: 0}
-	require.Events[3] = evdev.Event{Type: EV_ABS, Code: ABS_MT_POSITION_Y, Value: 0}
-	require.Events[4] = evdev.Event{Type: EV_SYN, Code: 0, Value: 0}
+	switch_release := getEventsMMap([]evdev.Event{
+		{Type: EV_ABS, Code: ABS_MT_SLOT, Value: 0},
+		{Type: EV_ABS, Code: ABS_MT_TOUCH_MAJOR, Value: 0},
+		{Type: EV_ABS, Code: ABS_MT_PRESSURE, Value: 0},
+		{Type: EV_ABS, Code: ABS_MT_TRACKING_ID, Value: -1},
+		{Type: EV_SYN, Code: 0, Value: 0},
+	})
 
-	release.Events[0] = evdev.Event{Type: EV_ABS, Code: ABS_MT_TRACKING_ID, Value: -1}
-	release.Events[1] = evdev.Event{Type: EV_SYN, Code: 0, Value: 0}
+	release_btnup := getEventsMMap([]evdev.Event{
+		{Type: EV_ABS, Code: ABS_MT_TOUCH_MAJOR, Value: 0},
+		{Type: EV_ABS, Code: ABS_MT_PRESSURE, Value: 0},
+		{Type: EV_ABS, Code: ABS_MT_TRACKING_ID, Value: -1},
+		{Type: EV_KEY, Code: BTN_TOUCH, Value: UP},
+		{Type: EV_SYN, Code: 0, Value: 0},
+	})
 
-	switch_release.Events[0] = evdev.Event{Type: EV_ABS, Code: ABS_MT_SLOT, Value: 0}
-	switch_release.Events[1] = evdev.Event{Type: EV_ABS, Code: ABS_MT_TRACKING_ID, Value: -1}
-	switch_release.Events[2] = evdev.Event{Type: EV_SYN, Code: 0, Value: 0}
+	switch_release_btnup := getEventsMMap([]evdev.Event{
+		{Type: EV_ABS, Code: ABS_MT_SLOT, Value: 0},
+		{Type: EV_ABS, Code: ABS_MT_TOUCH_MAJOR, Value: 0},
+		{Type: EV_ABS, Code: ABS_MT_PRESSURE, Value: 0},
+		{Type: EV_ABS, Code: ABS_MT_TRACKING_ID, Value: -1},
+		{Type: EV_KEY, Code: BTN_TOUCH, Value: UP},
+		{Type: EV_SYN, Code: 0, Value: 0},
+	})
 
-	switch_release_btnup.Events[0] = evdev.Event{Type: EV_ABS, Code: ABS_MT_SLOT, Value: 0}
-	switch_release_btnup.Events[1] = evdev.Event{Type: EV_ABS, Code: ABS_MT_TRACKING_ID, Value: -1}
-	switch_release_btnup.Events[2] = evdev.Event{Type: EV_KEY, Code: BTN_TOUCH, Value: UP}
-	switch_release_btnup.Events[3] = evdev.Event{Type: EV_SYN, Code: 0, Value: 0}
+	switch_move := getEventsMMap([]evdev.Event{
+		{Type: EV_ABS, Code: ABS_MT_SLOT, Value: 0},
+		{Type: EV_ABS, Code: ABS_MT_POSITION_X, Value: 0},
+		{Type: EV_ABS, Code: ABS_MT_POSITION_Y, Value: 0},
+		{Type: EV_ABS, Code: ABS_MT_TOUCH_MAJOR, Value: 4},
+		{Type: EV_ABS, Code: ABS_MT_PRESSURE, Value: 1},
+		{Type: EV_SYN, Code: 0, Value: 0},
+	})
 
-	release_btnup.Events[0] = evdev.Event{Type: EV_ABS, Code: ABS_MT_TRACKING_ID, Value: -1}
-	release_btnup.Events[1] = evdev.Event{Type: EV_KEY, Code: BTN_TOUCH, Value: UP}
-	release_btnup.Events[2] = evdev.Event{Type: EV_SYN, Code: 0, Value: 0}
-
-	switch_move.Events[0] = evdev.Event{Type: EV_ABS, Code: ABS_MT_SLOT, Value: 0}
-	switch_move.Events[1] = evdev.Event{Type: EV_ABS, Code: ABS_MT_POSITION_X, Value: 0}
-	switch_move.Events[2] = evdev.Event{Type: EV_ABS, Code: ABS_MT_POSITION_Y, Value: 0}
-	switch_move.Events[3] = evdev.Event{Type: EV_SYN, Code: 0, Value: 0}
-
-	move.Events[0] = evdev.Event{Type: EV_ABS, Code: ABS_MT_POSITION_X, Value: 0}
-	move.Events[1] = evdev.Event{Type: EV_ABS, Code: ABS_MT_POSITION_Y, Value: 0}
+	move := getEventsMMap([]evdev.Event{
+		{Type: EV_ABS, Code: ABS_MT_POSITION_X, Value: 0},
+		{Type: EV_ABS, Code: ABS_MT_POSITION_Y, Value: 0},
+		{Type: EV_ABS, Code: ABS_MT_TOUCH_MAJOR, Value: 4},
+		{Type: EV_ABS, Code: ABS_MT_PRESSURE, Value: 1},
+		{Type: EV_SYN, Code: 0, Value: 0},
+	})
 
 	return func(control_data touch_control_pack) {
 		// logger.Tracef("direct touch handeler recv control data:%v", control_data)
 		if control_data.id == -1 { //在任何正常情况下 这里是拿不到ID=-1的控制包的因此可以直接丢弃
 			return
 		}
-		if control_data.action == TouchActionRequire {
+		switch control_data.action {
+		case TouchActionRequire:
 			x, y := translateDirectXY(control_data.x, control_data.y)
 			last_id = control_data.id
 			if count += 1; count == 1 {
 				require_init.Events[0].Value = control_data.id
 				require_init.Events[1].Value = control_data.id
-				require_init.Events[3].Value = x
-				require_init.Events[4].Value = y
+				require_init.Events[2].Value = x
+				require_init.Events[3].Value = y
 				unix.Write(unixFd, require_init.data)
 			} else {
 				require.Events[0].Value = control_data.id
@@ -117,7 +141,7 @@ func handel_touch_using_direct_touch(index int) touch_control_func {
 				unix.Write(unixFd, require.data)
 			}
 
-		} else if control_data.action == TouchActionRelease {
+		case TouchActionRelease:
 			if last_id != control_data.id {
 				last_id = control_data.id
 				if count -= 1; count == 0 {
@@ -134,7 +158,7 @@ func handel_touch_using_direct_touch(index int) touch_control_func {
 					unix.Write(unixFd, release.data)
 				}
 			}
-		} else if control_data.action == TouchActionMove {
+		case TouchActionMove:
 			x, y := translateDirectXY(control_data.x, control_data.y)
 			if last_id != control_data.id {
 				last_id = control_data.id
