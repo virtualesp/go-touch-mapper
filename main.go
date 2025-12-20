@@ -633,6 +633,12 @@ func main() {
 		Default:  false,
 	})
 
+	var inputTouchEventIndex *int = parser.Int("i", "input-touch-index", &argparse.Options{
+		Required: false,
+		Default:  -1,
+		Help:     "真实触屏设备index，在direct模式与触屏混合模式下指定真实触屏设备index,默认-1不指定",
+	})
+
 	var uinputMouseKeyboardDisabled *bool = parser.Flag("u", "disable-uinput", &argparse.Options{
 		Required: false,
 		Help:     "不再创建uinput鼠标键盘设备,仅在uinput、inputmanager与direct模式生效",
@@ -859,11 +865,16 @@ func main() {
 
 		go auto_detect_and_read(main_events_ch, *patern)
 		if !*mixTouchDisabled && (*control_mode == "uinput" || *control_mode == "inputmanager") {
-			for index, devType := range get_possible_device_indexes(make(map[int]bool)) {
-				if devType == type_touch {
-					logger.Infof("启用触屏混合 %s(/dev/input/event%d)", get_dev_name_by_index(index), index)
-					go touch_dev_reader(mix_touch_event_ch, index)
-					// break
+			if *inputTouchEventIndex >= 0 {
+				logger.Warnf("指定了真实触屏设备 /dev/input/event%d,将忽略其他触屏设备", *inputTouchEventIndex)
+				go touch_dev_reader(mix_touch_event_ch, *inputTouchEventIndex)
+			} else {
+				for index, devType := range get_possible_device_indexes(make(map[int]bool)) {
+					if devType == type_touch {
+						logger.Infof("启用触屏混合 %s(/dev/input/event%d)", get_dev_name_by_index(index), index)
+						go touch_dev_reader(mix_touch_event_ch, index)
+						// break
+					}
 				}
 			}
 		}
@@ -958,11 +969,16 @@ func main() {
 			}
 			logger.Info("触屏控制将使用直接写入真实设备文件")
 			var direct_touch_index int
-			for index, devType := range get_possible_device_indexes(make(map[int]bool)) {
-				if devType == type_touch {
-					logger.Infof("将会直接写入触屏 %s(/dev/input/event%d)", get_dev_name_by_index(index), index)
-					direct_touch_index = index
-					break
+			if *inputTouchEventIndex >= 0 {
+				logger.Infof("指定了真实触屏设备 /dev/input/event%d,将直接写入该设备", *inputTouchEventIndex)
+				direct_touch_index = *inputTouchEventIndex
+			} else {
+				for index, devType := range get_possible_device_indexes(make(map[int]bool)) {
+					if devType == type_touch {
+						logger.Infof("将会直接写入触屏 %s(/dev/input/event%d)", get_dev_name_by_index(index), index)
+						direct_touch_index = index
+						break
+					}
 				}
 			}
 			touch_control_func = handel_touch_using_direct_touch(direct_touch_index)
