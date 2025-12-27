@@ -18,6 +18,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unsafe"
 
 	"github.com/akamensky/argparse"
 	"github.com/kenshaw/evdev"
@@ -65,7 +66,7 @@ func dev_reader(event_reader chan *event_pack, index int) {
 	event_ch := d.Poll(context.Background())
 	events := make([]*evdev.Event, 0)
 	dev_name := d.Name()
-	dev_type := check_dev_type(d)
+	dev_type := check_dev_type(d, fd)
 
 	if dev_type == type_motion_sensors {
 		global_motion_sensors_range[dev_name] = map[uint16][]int32{}
@@ -130,7 +131,7 @@ func touch_dev_reader(event_reader chan *event_pack, index int) {
 			} else if event.Type == evdev.SyncReport {
 				pack := &event_pack{
 					dev_name: dev_name,
-					dev_type: check_dev_type(d),
+					dev_type: type_touch_screen,
 					events:   events,
 				}
 				event_reader <- pack
@@ -305,12 +306,18 @@ const (
 	type_mouse          = dev_type(0)
 	type_keyboard       = dev_type(1)
 	type_joystick       = dev_type(2)
-	type_touch          = dev_type(3)
-	type_motion_sensors = dev_type(4)
-	type_unknown        = dev_type(5)
+	type_touch_screen   = dev_type(3)
+	type_touch_pad      = dev_type(4)
+	type_motion_sensors = dev_type(5)
+	type_unknown        = dev_type(6)
 )
 
-func check_dev_type(dev *evdev.Evdev) dev_type {
+const (
+	_INPUT_PROP_POINTER = 0 // 位号
+	_INPUT_PROP_DIRECT  = 1
+)
+
+func check_dev_type(dev *evdev.Evdev, fd *os.File) dev_type {
 	abs := dev.AbsoluteTypes()
 	key := dev.KeyTypes()
 	rel := dev.RelativeTypes()
@@ -319,7 +326,16 @@ func check_dev_type(dev *evdev.Evdev) dev_type {
 	_, MTSlot := abs[evdev.AbsoluteMTSlot]
 	_, MTTrackingID := abs[evdev.AbsoluteMTTrackingID]
 	if MTPositionX && MTPositionY && MTSlot && MTTrackingID {
-		return type_touch //触屏检测这几个abs类型即可
+		var bits int32
+		ioctl(fd.Fd(), EVIOCGPROP(), uintptr(unsafe.Pointer(&bits)))
+		if bits&(1<<_INPUT_PROP_DIRECT) != 0 {
+			return type_touch_screen
+		}
+		if bits&(1<<_INPUT_PROP_POINTER) != 0 {
+			return type_touch_pad
+		}
+		return type_unknown
+		// return type_touch_screen //触屏检测这几个abs类型即可
 	}
 	_, RelX := rel[evdev.RelativeX]
 	_, RelY := rel[evdev.RelativeY]
@@ -399,7 +415,7 @@ func get_possible_device_indexes(skipList map[int]bool) map[int]dev_type {
 			}
 			d := evdev.Open(fd)
 			defer d.Close()
-			devType := check_dev_type(d)
+			devType := check_dev_type(d, fd)
 			if devType != type_unknown {
 				result[index] = devType
 			}
@@ -538,11 +554,13 @@ func auto_detect_and_read(event_chan chan *event_pack, patern string) {
 		default:
 			auto_detect_result := get_possible_device_indexes(devices)
 			devTypeFriendlyName := map[dev_type]string{
-				type_mouse:    "鼠标",
-				type_keyboard: "键盘",
-				type_joystick: "手柄",
-				type_touch:    "触屏",
-				type_unknown:  "未知",
+				type_mouse:          "鼠标",
+				type_keyboard:       "键盘",
+				type_joystick:       "手柄",
+				type_touch_screen:   "触屏",
+				type_touch_pad:      "触摸板",
+				type_motion_sensors: "运动传感器",
+				type_unknown:        "未知",
 			}
 			for index, devType := range auto_detect_result {
 				devName := get_dev_name_by_index(index)
@@ -870,7 +888,7 @@ func main() {
 				go touch_dev_reader(mix_touch_event_ch, *inputTouchEventIndex)
 			} else {
 				for index, devType := range get_possible_device_indexes(make(map[int]bool)) {
-					if devType == type_touch {
+					if devType == type_touch_screen {
 						logger.Infof("启用触屏混合 %s(/dev/input/event%d)", get_dev_name_by_index(index), index)
 						go touch_dev_reader(mix_touch_event_ch, index)
 						// break
@@ -974,7 +992,7 @@ func main() {
 				direct_touch_index = *inputTouchEventIndex
 			} else {
 				for index, devType := range get_possible_device_indexes(make(map[int]bool)) {
-					if devType == type_touch {
+					if devType == type_touch_screen {
 						logger.Infof("将会直接写入触屏 %s(/dev/input/event%d)", get_dev_name_by_index(index), index)
 						direct_touch_index = index
 						break

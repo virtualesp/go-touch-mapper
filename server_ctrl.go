@@ -103,7 +103,9 @@ func serve(port int, mapperFilePath string, reloadConfigureFunc func(mapperFileP
 				return
 			}
 			reloadConfigureFunc(mapperFilePath)
-			pm.update_user_config(plugin_json)
+			if pm != nil {
+				pm.update_user_config(plugin_json)
+			}
 			w.Write([]byte("配置更新成功"))
 			logger.Info("配置文件已更新并重新加载")
 		}

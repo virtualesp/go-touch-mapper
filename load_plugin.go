@@ -90,7 +90,7 @@ func InitPluginManager() (*PluginManager, error) {
 	workingDir, _ := filepath.Split(abspath)
 	pluginBinPath := filepath.Join(workingDir, "plugin.bin")
 	if _, err := os.Stat(pluginBinPath); os.IsNotExist(err) {
-		logger.Errorf("未加载插件进程 : %s", pluginBinPath)
+		logger.Debugf("未加载插件进程 : %s", pluginBinPath)
 		return nil, err
 	}
 	pluginConfigDir := filepath.Join(workingDir, "pluginconfig")
@@ -137,7 +137,7 @@ func InitPluginManager() (*PluginManager, error) {
 	// 然后等待 接收插件用户配置
 	plugin_id, err := readString(reader)
 	if err != nil {
-		logger.Errorf("读取插件ID失败 : %s", err.Error())
+		logger.Debugf("读取插件ID失败 : %s", err.Error())
 		os.Exit(3)
 	} else {
 		logger.Infof("插件ID: %s", plugin_id)
