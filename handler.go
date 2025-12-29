@@ -541,6 +541,14 @@ func (self *TouchHandler) loop_handel_rs_move() {
 	}
 }
 
+func (self *TouchHandler) getViewStartPos() (int32, int32) {
+	if self.view_range < 2 {
+		return self.get_scaled_pos(self.view_init_x, self.view_init_y)
+	} else {
+		return self.get_scaled_pos(self.view_init_x+rand.Int31n(self.view_range*2)-self.view_range, self.view_init_y+rand.Int31n(self.view_range*2)-self.view_range)
+	}
+}
+
 func (self *TouchHandler) handel_view_move(offset_x int32, offset_y int32) { //视角移动
 	self.view_lock.Lock()
 	defer self.view_lock.Unlock()
@@ -552,14 +560,14 @@ func (self *TouchHandler) handel_view_move(offset_x int32, offset_y int32) { //�
 	self.auto_release_view_count = 0
 	if self.view_id == -1 {
 		// self.view_current_x, self.view_current_y = self.get_scaled_pos(self.view_init_x+rand_offset(), self.view_init_y+rand_offset())
-		self.view_current_x, self.view_current_y = self.get_scaled_pos(self.view_init_x+rand.Int31n(self.view_range*2)-self.view_range, self.view_init_y+rand.Int31n(self.view_range*2)-self.view_range)
+		self.view_current_x, self.view_current_y = self.getViewStartPos()
 		self.view_id = self.touch_require(self.view_current_x, self.view_current_y, false)
 	}
 	self.view_current_x += offset_x * self.view_speed_x
 	self.view_current_y += offset_y * self.view_speed_y
 	if self.view_current_x < 0 || self.view_current_y < 0 { //出现负数 表示到达边界
 		// self.view_current_x, self.view_current_y = self.get_scaled_pos(self.view_init_x+rand_offset(), self.view_init_y+rand_offset())
-		self.view_current_x, self.view_current_y = self.get_scaled_pos(self.view_init_x+rand_offset(), self.view_init_y+rand_offset())
+		self.view_current_x, self.view_current_y = self.getViewStartPos()
 		tmp_view_id := self.touch_require(self.view_current_x, self.view_current_y, false)
 		self.view_current_x += offset_x * self.view_speed_x
 		self.view_current_y += offset_y * self.view_speed_y
