@@ -348,6 +348,8 @@ export default function ConfigManager() {
 
     const exportJSON = () => {
         setExportButtonText("配置更新中")
+        console.log(config)
+        console.log(pluginValue)
         fetch('/configure/set', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -926,6 +928,14 @@ export default function ConfigManager() {
                         draft.KEY_MAPS[data["KEY"]] = { "TYPE": "PRESS", "POS": [0.4, 0.4] }
                     }
                 }))
+            } else if (e.target.value === "WHEEL") {
+                setConfig(produce(draft => {
+                    if (Object.keys(config["KEY_MAPS"][data["KEY"]]).indexOf("POS") !== -1) {
+                        draft.KEY_MAPS[data["KEY"]] = { "TYPE": "WHEEL", "POS": config["KEY_MAPS"][data["KEY"]]["POS"] }
+                    } else {
+                        draft.KEY_MAPS[data["KEY"]] = { "TYPE": "WHEEL", "POS": [0.4, 0.4] }
+                    }
+                }))
             } else if (e.target.value === "AUTO_FIRE") {
                 setConfig(produce(draft => {
                     if (Object.keys(config["KEY_MAPS"][data["KEY"]]).indexOf("POS") !== -1) {
@@ -957,7 +967,7 @@ export default function ConfigManager() {
                 alignItems="center"
             >
                 {
-                    data["TYPE"] === "PRESS" || data["TYPE"] === "AUTO_FIRE" || data["TYPE"] === "CLICK" ?
+                    data["TYPE"] === "PRESS" || data["TYPE"] === "AUTO_FIRE" || data["TYPE"] === "CLICK" || data["TYPE"] === "WHEEL" ?
                         <Grid item xs={5}><a>{`${data["KEY"]} : (${getDisplayValueX(data["POS"][0])} , ${getDisplayValueY(data["POS"][1])})`}</a></Grid> :
                         <Grid item xs={5}><a>{`${data["KEY"]} `}</a></Grid>
                 }
@@ -971,6 +981,7 @@ export default function ConfigManager() {
                             sx={{ height: "30px", }}
                         >
                             {!isWheel && <MenuItem value={"PRESS"}>同步按下释放</MenuItem>}
+                            {!isWheel && <MenuItem value={"WHEEL"}>快捷轮盘</MenuItem>}
                             <MenuItem value={"CLICK"}>单次点击</MenuItem>
                             {!isWheel && <MenuItem value={"AUTO_FIRE"}>连发</MenuItem>}
                             <MenuItem value={"DRAG"}>滑动</MenuItem>
@@ -1057,7 +1068,7 @@ export default function ConfigManager() {
 
     const KeyShow = ({ data }) => {
         return <div>
-            {data["TYPE"] === "PRESS" || data["TYPE"] === "AUTO_FIRE" || data["TYPE"] === "CLICK" ? <FixedIcon x={getPostionValueX(data["POS"][0])} y={getPostionValueY(data["POS"][1])} text={data["KEY"]} /> : null}
+            {data["TYPE"] === "PRESS" || data["TYPE"] === "AUTO_FIRE" || data["TYPE"] === "CLICK" || data["TYPE"] === "WHEEL" ? <FixedIcon x={getPostionValueX(data["POS"][0])} y={getPostionValueY(data["POS"][1])} text={data["KEY"]} /> : null}
             {data["TYPE"] === "MULT_PRESS" ? <GroupFixedIcon pos_s={data["POS_S"].map(([x, y]) => [getPostionValueX(x), getPostionValueY(y)])} text={data["KEY"]} bgColor={"#00796B"} textColor={"#ffffff"} /> : null}
             {data["TYPE"] === "DRAG" ? <GroupFixedIcon pos_s={data["POS_S"].map(([x, y]) => [getPostionValueX(x), getPostionValueY(y)])} text={data["KEY"]} bgColor={"#3F51B5"} textColor={"#ffffff"} /> : null}
         </div>

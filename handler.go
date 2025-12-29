@@ -30,13 +30,14 @@ type TouchHandler struct {
 	screen_y                int32                       //屏幕高度
 	rel_screen_x            int32
 	rel_screen_y            int32
-	view_init_x             int32 //初始化视角映射的x坐标
-	view_init_y             int32 //初始化视角映射的y坐标
-	view_range              int32 //随机的范围
-	view_current_x          int32 //当前视角映射的x坐标
-	view_current_y          int32 //当前视角映射的y坐标
-	view_speed_x            int32 //视角x方向的速度
-	view_speed_y            int32 //视角y方向的速度
+	view_init_x             int32                //初始化视角映射的x坐标
+	view_init_y             int32                //初始化视角映射的y坐标
+	view_range              int32                //随机的范围
+	view_action_select      struct{ x, y int32 } //用户选择的视角映射点
+	view_current_x          int32                //当前视角映射的x坐标
+	view_current_y          int32                //当前视角映射的y坐标
+	view_speed_x            int32                //视角x方向的速度
+	view_speed_y            int32                //视角y方向的速度
 	rs_speed_x              float64
 	rs_speed_y              float64
 	wheel_init_x            int32 //初始化左摇杆映射的x坐标
@@ -330,19 +331,20 @@ func InitTouchHandler(
 		wheel_id:           -1,
 		allocated_id:       make([]bool, 12),
 		// ^^^ 是可以创建超过12个的 只是不显示白点罢了
-		config:         config_json,
-		joystickInfo:   joystickInfo,
-		screen_x:       int32(screenSizeX),
-		screen_y:       int32(screenSizeY),
-		rel_screen_x:   int32(screenSizeX),
-		rel_screen_y:   int32(screenSizeY),
-		view_init_x:    int32(config_json.Get("MOUSE").Get("POS").GetIndex(0).MustFloat64() * float64(screenSizeX)),
-		view_init_y:    int32(config_json.Get("MOUSE").Get("POS").GetIndex(1).MustFloat64() * float64(screenSizeY)),
-		view_range:     int32(config_json.Get("MOUSE").Get("RANGE").MustFloat64() * float64(screenSizeX)),
-		view_current_x: int32(config_json.Get("MOUSE").Get("POS").GetIndex(0).MustFloat64() * float64(screenSizeX)),
-		view_current_y: int32(config_json.Get("MOUSE").Get("POS").GetIndex(1).MustFloat64() * float64(screenSizeY)),
-		view_speed_x:   int32(config_json.Get("MOUSE").Get("SPEED").GetIndex(0).MustFloat64() * 0x7ffffffe / float64(screenSizeX)),
-		view_speed_y:   int32(config_json.Get("MOUSE").Get("SPEED").GetIndex(1).MustFloat64() * 0x7ffffffe / float64(screenSizeX)),
+		config:             config_json,
+		joystickInfo:       joystickInfo,
+		screen_x:           int32(screenSizeX),
+		screen_y:           int32(screenSizeY),
+		rel_screen_x:       int32(screenSizeX),
+		rel_screen_y:       int32(screenSizeY),
+		view_init_x:        int32(config_json.Get("MOUSE").Get("POS").GetIndex(0).MustFloat64() * float64(screenSizeX)),
+		view_init_y:        int32(config_json.Get("MOUSE").Get("POS").GetIndex(1).MustFloat64() * float64(screenSizeY)),
+		view_range:         int32(config_json.Get("MOUSE").Get("RANGE").MustFloat64() * float64(screenSizeX)),
+		view_action_select: struct{ x, y int32 }{-1, -1},
+		view_current_x:     int32(config_json.Get("MOUSE").Get("POS").GetIndex(0).MustFloat64() * float64(screenSizeX)),
+		view_current_y:     int32(config_json.Get("MOUSE").Get("POS").GetIndex(1).MustFloat64() * float64(screenSizeY)),
+		view_speed_x:       int32(config_json.Get("MOUSE").Get("SPEED").GetIndex(0).MustFloat64() * 0x7ffffffe / float64(screenSizeX)),
+		view_speed_y:       int32(config_json.Get("MOUSE").Get("SPEED").GetIndex(1).MustFloat64() * 0x7ffffffe / float64(screenSizeX)),
 		// rs_speed_x:     config_json.Get("MOUSE").Get("RS_SPEED").GetIndex(0).MustFloat64(),
 		// rs_speed_y:     config_json.Get("MOUSE").Get("RS_SPEED").GetIndex(1).MustFloat64(),
 		rs_speed_x:   32,
@@ -413,6 +415,7 @@ func (self *TouchHandler) reloadConfigure(mapperFilePath string) {
 	self.wheel_init_x = int32(config_json.Get("WHEEL").Get("POS").GetIndex(0).MustFloat64() * float64(screenSizeX))
 	self.wheel_init_y = int32(config_json.Get("WHEEL").Get("POS").GetIndex(1).MustFloat64() * float64(screenSizeY))
 	self.wheel_range = int32(config_json.Get("WHEEL").Get("RANGE").MustFloat64() * float64(screenSizeX))
+	self.view_action_select = struct{ x, y int32 }{-1, -1}
 	self.wheel_wasd = []string{
 		config_json.Get("WHEEL").Get("WASD").GetIndex(0).MustString(),
 		config_json.Get("WHEEL").Get("WASD").GetIndex(1).MustString(),
@@ -542,10 +545,14 @@ func (self *TouchHandler) loop_handel_rs_move() {
 }
 
 func (self *TouchHandler) getViewStartPos() (int32, int32) {
-	if self.view_range < 2 {
-		return self.get_scaled_pos(self.view_init_x, self.view_init_y)
+	if self.view_action_select.x != -1 && self.view_action_select.y != -1 {
+		return self.get_scaled_pos(self.view_action_select.x, self.view_action_select.y)
 	} else {
-		return self.get_scaled_pos(self.view_init_x+rand.Int31n(self.view_range*2)-self.view_range, self.view_init_y+rand.Int31n(self.view_range*2)-self.view_range)
+		if self.view_range < 2 {
+			return self.get_scaled_pos(self.view_init_x, self.view_init_y)
+		} else {
+			return self.get_scaled_pos(self.view_init_x+rand.Int31n(self.view_range*2)-self.view_range, self.view_init_y+rand.Int31n(self.view_range*2)-self.view_range)
+		}
 	}
 }
 
@@ -590,7 +597,7 @@ func (self *TouchHandler) auto_handel_view_release(timeout int) { //视角释放
 				return
 			default:
 				self.view_lock.Lock()
-				if self.view_id != -1 {
+				if self.view_id != -1 && self.view_action_select.x == -1 && self.view_action_select.y == -1 {
 					self.auto_release_view_count += 1
 					if self.auto_release_view_count > int32(timeout/50) { //200ms不动 则释放
 						self.auto_release_view_count = 0
@@ -858,7 +865,26 @@ func (self *TouchHandler) execute_key_action(start time.Time, key_name string, u
 		} else if up_down == UP {
 
 		}
-
+	case "WHEEL": //轮盘打药或者小眼睛视野
+		if up_down == DOWN {
+			x := int32(action.Get("POS").GetIndex(0).MustFloat64()*float64(self.rel_screen_x)) + rand_offset()
+			y := int32(action.Get("POS").GetIndex(1).MustFloat64()*float64(self.rel_screen_y)) + rand_offset()
+			self.key_action_state_save.Store(key_name, true)
+			self.view_lock.Lock()
+			self.view_action_select = struct{ x, y int32 }{x, y}
+			if self.view_id != -1 {
+				self.view_id = self.touch_release(self.view_id)
+			}
+			self.view_lock.Unlock()
+		} else if up_down == UP {
+			self.key_action_state_save.Delete(key_name)
+			self.view_lock.Lock()
+			self.view_action_select = struct{ x, y int32 }{-1, -1}
+			if self.view_id != -1 {
+				self.view_id = self.touch_release(self.view_id)
+			}
+			self.view_lock.Unlock()
+		}
 	}
 }
 
