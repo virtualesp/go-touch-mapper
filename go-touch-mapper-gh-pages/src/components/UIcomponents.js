@@ -169,7 +169,7 @@ const WheelShow = ({ x, y, range, shift_range }) => {
 }
 
 
-const ViewShow = ({ x, y }) => {
+const ViewShow = ({ x, y ,range }) => {
     // 视角中心点显示
     //在屏幕上显示两条垂直线，中间是一个小的空心圆
     return <div>
@@ -195,11 +195,11 @@ const ViewShow = ({ x, y }) => {
             position: 'absolute',
             left: x,
             top: y,
-            width: 32,
-            height: 32,
-            borderRadius: 16,
-            marginLeft: -16,
-            marginTop: -16,
+            width: range * 2,
+            height: range * 2,
+            borderRadius: range * 2,
+            marginLeft: -range * 2 / 2,
+            marginTop: -range * 2 / 2,
             border: "2px solid #d90051",
             backgroundColor: "#transparent",
             pointerEvents: "none",

@@ -32,6 +32,7 @@ type TouchHandler struct {
 	rel_screen_y            int32
 	view_init_x             int32 //初始化视角映射的x坐标
 	view_init_y             int32 //初始化视角映射的y坐标
+	view_range              int32 //随机的范围
 	view_current_x          int32 //当前视角映射的x坐标
 	view_current_y          int32 //当前视角映射的y坐标
 	view_speed_x            int32 //视角x方向的速度
@@ -337,6 +338,7 @@ func InitTouchHandler(
 		rel_screen_y:   int32(screenSizeY),
 		view_init_x:    int32(config_json.Get("MOUSE").Get("POS").GetIndex(0).MustFloat64() * float64(screenSizeX)),
 		view_init_y:    int32(config_json.Get("MOUSE").Get("POS").GetIndex(1).MustFloat64() * float64(screenSizeY)),
+		view_range:     int32(config_json.Get("MOUSE").Get("RANGE").MustFloat64() * float64(screenSizeX)),
 		view_current_x: int32(config_json.Get("MOUSE").Get("POS").GetIndex(0).MustFloat64() * float64(screenSizeX)),
 		view_current_y: int32(config_json.Get("MOUSE").Get("POS").GetIndex(1).MustFloat64() * float64(screenSizeY)),
 		view_speed_x:   int32(config_json.Get("MOUSE").Get("SPEED").GetIndex(0).MustFloat64() * 0x7ffffffe / float64(screenSizeX)),
@@ -403,6 +405,7 @@ func (self *TouchHandler) reloadConfigure(mapperFilePath string) {
 	self.rel_screen_y = int32(screenSizeY)
 	self.view_init_x = int32(config_json.Get("MOUSE").Get("POS").GetIndex(0).MustFloat64() * float64(screenSizeX))
 	self.view_init_y = int32(config_json.Get("MOUSE").Get("POS").GetIndex(1).MustFloat64() * float64(screenSizeY))
+	self.view_range = int32(config_json.Get("MOUSE").Get("RANGE").MustFloat64() * float64(screenSizeX))
 	self.view_current_x = int32(config_json.Get("MOUSE").Get("POS").GetIndex(0).MustFloat64() * float64(screenSizeX))
 	self.view_current_y = int32(config_json.Get("MOUSE").Get("POS").GetIndex(1).MustFloat64() * float64(screenSizeY))
 	self.view_speed_x = int32(config_json.Get("MOUSE").Get("SPEED").GetIndex(0).MustFloat64() * 0x7ffffffe / float64(screenSizeX))
@@ -548,12 +551,14 @@ func (self *TouchHandler) handel_view_move(offset_x int32, offset_y int32) { //�
 	}
 	self.auto_release_view_count = 0
 	if self.view_id == -1 {
-		self.view_current_x, self.view_current_y = self.get_scaled_pos(self.view_init_x+rand_offset(), self.view_init_y+rand_offset())
+		// self.view_current_x, self.view_current_y = self.get_scaled_pos(self.view_init_x+rand_offset(), self.view_init_y+rand_offset())
+		self.view_current_x, self.view_current_y = self.get_scaled_pos(self.view_init_x+rand.Int31n(self.view_range*2)-self.view_range, self.view_init_y+rand.Int31n(self.view_range*2)-self.view_range)
 		self.view_id = self.touch_require(self.view_current_x, self.view_current_y, false)
 	}
 	self.view_current_x += offset_x * self.view_speed_x
 	self.view_current_y += offset_y * self.view_speed_y
 	if self.view_current_x < 0 || self.view_current_y < 0 { //出现负数 表示到达边界
+		// self.view_current_x, self.view_current_y = self.get_scaled_pos(self.view_init_x+rand_offset(), self.view_init_y+rand_offset())
 		self.view_current_x, self.view_current_y = self.get_scaled_pos(self.view_init_x+rand_offset(), self.view_init_y+rand_offset())
 		tmp_view_id := self.touch_require(self.view_current_x, self.view_current_y, false)
 		self.view_current_x += offset_x * self.view_speed_x

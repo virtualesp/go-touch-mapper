@@ -118,6 +118,7 @@ export default function ConfigManager() {
         },
         "MOUSE": {
             "SWITCH_KEYS": ["KEY_GRAVE"],
+            "RANGE": 0.05,
             "POS": [
                 0.52,
                 0.5
@@ -370,6 +371,7 @@ export default function ConfigManager() {
 
         const wheelPosSelecting = useRef(false)
         const [range, setRange] = useState(config["WHEEL"]["RANGE"] * 100)
+        const [viewRange,setViewRange] = useState(config["MOUSE"]["RANGE"] * 100)
         const [shiftRange, setShiftRange] = useState(config["WHEEL"]["SHIFT_RANGE"] * 100)
 
         const [setPosButtonDisabled, setSetPosButtonDisabled] = useState(false)
@@ -593,6 +595,38 @@ export default function ConfigManager() {
                         <a>{`视角中心位置:(${parseInt(config["MOUSE"]["POS"][0] * config["SCREEN"]["SIZE"][0])} , ${parseInt(config["MOUSE"]["POS"][1] * config["SCREEN"]["SIZE"][1])})`} </a>
                         <Button onClick={() => { viewCenterSetting.current = true }} disabled={setPosButtonDisabled} sx={{ height: "30px", marginLeft: "10px" }} variant="outlined"  >重设</Button>
 
+
+                    </Grid>
+
+
+                </Grid>
+
+                <Grid
+                    container
+                    direction="row"
+                    justifyContent="flex-start"
+                    alignItems="center"
+                    sx={{
+                        height: "50px",
+                    }}
+                >
+                    <Typography gutterBottom>
+                        随机范围 {Number.parseInt(viewRange * config["SCREEN"]["SIZE"][0] / 100)}
+                    </Typography>
+                    <Grid container spacing={2}>
+                        <Grid item xs>
+                            <Slider
+                                min={0}
+                                max={50}
+                                step={1}
+                                value={viewRange}
+                                onChange={(_, value) => { setViewRange(value) }}
+                                onChangeCommitted={(_, value) => {
+                                    setViewRange(value)
+                                    setConfig(produce(draft => { draft.MOUSE.RANGE = Number(value) / 100; }))
+                                }}
+                            />
+                        </Grid>
                     </Grid>
                 </Grid>
 
@@ -1259,7 +1293,7 @@ export default function ConfigManager() {
             range={getPostionValueX(config["WHEEL"]["RANGE"])}
             shift_range={config["WHEEL"]["SHIFT_RANGE_ENABLE"] ? getPostionValueX(config["WHEEL"]["SHIFT_RANGE"]) : 0}
         />
-        <ViewShow x={getPostionValueX(config["MOUSE"]["POS"][0])} y={getPostionValueY(config["MOUSE"]["POS"][1])} />
+        <ViewShow x={getPostionValueX(config["MOUSE"]["POS"][0])} y={getPostionValueY(config["MOUSE"]["POS"][1])} range={getPostionValueX(config["MOUSE"]["RANGE"])} />
         <input id="fileInput" type="file" style={{ display: "none" }} accept="image/*" onChange={handleFileChange} ></input>
 
     </div>
