@@ -935,57 +935,70 @@ func (self *TouchHandler) execute_key_action(start time.Time, key_name string, u
 	case "SMART_TOGGLE":
 		separat := action.Get("SEPARAT").MustBool() //双击在一次按下抬起完成 还是一次按键对应一个点
 		release_mouse := action.Get("RELEASE_MOUSE").MustBool()
+		execTouch := action.Get("TOUCH").MustBool()
 		x_start := int32(action.Get("POS_S").GetIndex(0).GetIndex(0).MustFloat64()*float64(self.rel_screen_x)) + rand_offset()
 		y_start := int32(action.Get("POS_S").GetIndex(0).GetIndex(1).MustFloat64()*float64(self.rel_screen_y)) + rand_offset()
 		x_end := int32(action.Get("POS_S").GetIndex(1).GetIndex(0).MustFloat64()*float64(self.rel_screen_x)) + rand_offset()
 		y_end := int32(action.Get("POS_S").GetIndex(1).GetIndex(1).MustFloat64()*float64(self.rel_screen_y)) + rand_offset()
-		if separat { //两次操作，按下第一次 点击，然后可以控制鼠标  第二次点击另一位置，然后再转为控制视角
+		if separat { //整个过程需要两次按键点击完成
 			if up_down == DOWN {
 				if !contains {
+					self.key_action_state_save.Store(key_name, true)
 					go (func() {
-						tid := self.touch_require(x_start, y_start, true)
-						time.Sleep(time.Duration(8) * time.Millisecond) //8ms 120HZ下一次
-						self.touch_release(tid)
-						self.key_action_state_save.Store(key_name, true)
 						if release_mouse {
 							self.map_temporary_off = true
+							self.map_switch_signal <- false
 							self.view_lock.Lock()
 							self.view_id = self.touch_release(self.view_id)
 							self.view_lock.Unlock()
 						}
+						if execTouch {
+							tid := self.touch_require(x_start, y_start, true)
+							time.Sleep(time.Duration(8) * time.Millisecond) //8ms 120HZ下一次
+							self.touch_release(tid)
+						}
 					})()
 				} else {
+					self.key_action_state_save.Delete(key_name)
 					go (func() {
-						tid := self.touch_require(x_end, y_end, true)
-						time.Sleep(time.Duration(8) * time.Millisecond) //8ms 120HZ下一次
-						self.touch_release(tid)
-						self.key_action_state_save.Delete(key_name)
 						if release_mouse {
 							self.map_temporary_off = false
+							self.map_switch_signal <- true
+						}
+						if execTouch {
+							tid := self.touch_require(x_end, y_end, true)
+							time.Sleep(time.Duration(8) * time.Millisecond) //8ms 120HZ下一次
+							self.touch_release(tid)
 						}
 					})()
 				}
 			}
-		} else {
+		} else { //整个过程在一个按键的按下抬起中完成
 			if up_down == DOWN {
 				go (func() {
-					tid := self.touch_require(x_start, y_start, true)
-					time.Sleep(time.Duration(8) * time.Millisecond) //8ms 120HZ下一次
-					self.touch_release(tid)
 					if release_mouse {
 						self.map_temporary_off = true
+						self.map_switch_signal <- false
 						self.view_lock.Lock()
 						self.view_id = self.touch_release(self.view_id)
 						self.view_lock.Unlock()
 					}
+					if execTouch {
+						tid := self.touch_require(x_start, y_start, true)
+						time.Sleep(time.Duration(8) * time.Millisecond) //8ms 120HZ下一次
+						self.touch_release(tid)
+					}
 				})()
 			} else {
 				go (func() {
-					tid := self.touch_require(x_end, y_end, true)
-					time.Sleep(time.Duration(8) * time.Millisecond) //8ms 120HZ下一次
-					self.touch_release(tid)
 					if release_mouse {
 						self.map_temporary_off = false
+						self.map_switch_signal <- true
+					}
+					if execTouch {
+						tid := self.touch_require(x_end, y_end, true)
+						time.Sleep(time.Duration(8) * time.Millisecond) //8ms 120HZ下一次
+						self.touch_release(tid)
 					}
 				})()
 			}

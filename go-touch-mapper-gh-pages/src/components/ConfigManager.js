@@ -373,7 +373,7 @@ export default function ConfigManager() {
 
         const wheelPosSelecting = useRef(false)
         const [range, setRange] = useState(config["WHEEL"]["RANGE"] * 100)
-        const [viewRange,setViewRange] = useState(config["MOUSE"]["RANGE"] * 100)
+        const [viewRange, setViewRange] = useState(config["MOUSE"]["RANGE"] * 100)
         const [shiftRange, setShiftRange] = useState(config["WHEEL"]["SHIFT_RANGE"] * 100)
 
         const [setPosButtonDisabled, setSetPosButtonDisabled] = useState(false)
@@ -905,6 +905,109 @@ export default function ConfigManager() {
         </div>
     }
 
+    const Type_smart_toggle = ({ data }) => {
+        const waitingIndex = useRef(null)
+        const [disabledReset, setDisabledReset] = useState([false, false])
+        const ensureInit = () => {
+            if (!Array.isArray(data["POS_S"]) || data["POS_S"].length < 2) {
+                setConfig(produce(draft => {
+                    const cur = draft.KEY_MAPS[data["KEY"]]
+                    cur.POS_S = cur.POS_S && cur.POS_S.length >= 2 ? cur.POS_S.slice(0, 2) : [[0.1, 0.1], [0.2, 0.2]]
+                    if (typeof cur.RELEASE_MOUSE !== "boolean") cur.RELEASE_MOUSE = true
+                    if (typeof cur.SEPARAT !== "boolean") cur.SEPARAT = false
+                }))
+            }
+        }
+        useEffect(() => { ensureInit() }, [])
+        const onReset = (idx) => {
+            waitingIndex.current = idx
+            setDisabledReset(prev => prev.map((v, i) => i === idx ? true : v))
+        }
+        const imgClickListener = (e) => {
+            if (waitingIndex.current !== null) {
+                const idx = waitingIndex.current
+                setConfig(produce(draft => {
+                    draft.KEY_MAPS[data["KEY"]].POS_S[idx] = [e.detail.x, e.detail.y]
+                }))
+                setDisabledReset([false, false])
+                waitingIndex.current = null
+            }
+        }
+        useEffect(() => {
+            window.addEventListener('imgOnNoKeyClick', imgClickListener)
+            return () => { window.removeEventListener('imgOnNoKeyClick', imgClickListener) }
+        }, [])
+        const posA = (data["POS_S"] && data["POS_S"][0]) ? data["POS_S"][0] : [0.1, 0.1]
+        const posB = (data["POS_S"] && data["POS_S"][1]) ? data["POS_S"][1] : [0.2, 0.2]
+        return <div>
+            <Grid container spacing={1}>
+                <Grid item >
+                    <Typography>触点 0：({getDisplayValueX(posA[0])} , {getDisplayValueY(posA[1])})</Typography>
+                </Grid>
+                <Grid item>
+                    <Button onClick={() => onReset(0)} disabled={disabledReset[0]} variant="outlined" sx={{ height: "30px", width: "105px" }}>重设</Button>
+                </Grid>
+                <Grid item sx={{ marginTop: "8px" }}>
+                    <Typography>触点 1：({getDisplayValueX(posB[0])} , {getDisplayValueY(posB[1])})</Typography>
+                </Grid>
+                <Grid item>
+                    <Button onClick={() => onReset(1)} disabled={disabledReset[1]} variant="outlined" sx={{ height: "30px", width: "105px" }}>重设</Button>
+                </Grid>
+                <Grid item xs={9} sx={{ marginTop: "12px" }}>
+                    <Typography>{
+                        data["SEPARAT"] === true ? 
+                        "按键点击释放光标，再点击继续映射":
+                        "按键按下释放光标，抬起继续映射"
+                        }</Typography>
+                </Grid>
+                <Grid item xs={3}>
+                    <Switch
+                        checked={data["SEPARAT"]}
+                        onChange={() => {
+                            setConfig(produce(draft => { draft.KEY_MAPS[data["KEY"]].SEPARAT = !draft.KEY_MAPS[data["KEY"]].SEPARAT }))
+                        }}
+                    />
+                </Grid>
+                <Grid item xs={9}>
+                    <Typography>{
+                        data["RELEASE_MOUSE"] === true ?
+                        "释放光标":
+                        "不释放光标"
+                        }</Typography>
+                </Grid>
+                <Grid item xs={3}>
+                    <Switch
+                        checked={data["RELEASE_MOUSE"]}
+                        onChange={() => {
+                            setConfig(produce(draft => { draft.KEY_MAPS[data["KEY"]].RELEASE_MOUSE = !draft.KEY_MAPS[data["KEY"]].RELEASE_MOUSE }))
+                        }}
+                    />
+                </Grid>
+                <Grid item xs={9}>
+                    <Typography>{
+                        data["TOUCH"] === true ?
+                        "执行点击并释放光标":
+                        "仅释放光标"
+                        }</Typography>
+                </Grid>
+                <Grid item xs={3}>
+                    <Switch
+                        checked={data["TOUCH"]}
+                        onChange={() => {
+                            setConfig(produce(draft => { 
+                                draft.KEY_MAPS[data["KEY"]].TOUCH = !draft.KEY_MAPS[data["KEY"]].TOUCH ;
+                            }))
+                        }}
+                    />
+                </Grid>
+            </Grid>
+           
+        </div>
+    }
+
+
+
+
 
 
     const KeySettingRender = ({ data }) => {
@@ -952,6 +1055,10 @@ export default function ConfigManager() {
                 setConfig(produce(draft => {
                     draft.KEY_MAPS[data["KEY"]] = { "TYPE": "MULT_PRESS", "POS_S": [], }
                 }))
+            } else if (e.target.value === "SMART_TOGGLE") {
+                setConfig(produce(draft => {
+                    draft.KEY_MAPS[data["KEY"]] = { "TYPE": "SMART_TOGGLE", "POS_S": [[0.1, 0.1], [0.2, 0.2]], "RELEASE_MOUSE": true, "SEPARAT": false , "TOUCH": true}
+                }))
             }
         }
 
@@ -982,6 +1089,7 @@ export default function ConfigManager() {
                         >
                             {!isWheel && <MenuItem value={"PRESS"}>同步按下释放</MenuItem>}
                             {!isWheel && <MenuItem value={"WHEEL"}>快捷轮盘</MenuItem>}
+                            {!isWheel && <MenuItem value={"SMART_TOGGLE"}>光标智能切换</MenuItem>}
                             <MenuItem value={"CLICK"}>单次点击</MenuItem>
                             {!isWheel && <MenuItem value={"AUTO_FIRE"}>连发</MenuItem>}
                             <MenuItem value={"DRAG"}>滑动</MenuItem>
@@ -1001,7 +1109,7 @@ export default function ConfigManager() {
             {data["TYPE"] === "AUTO_FIRE" ? <Type_auto_fire data={data} /> : null}
             {data["TYPE"] === "DRAG" ? <Type_drag data={data} /> : null}
             {data["TYPE"] === "MULT_PRESS" ? <Type_mult_press data={data} /> : null}
-
+            {data["TYPE"] === "SMART_TOGGLE" ? <Type_smart_toggle data={data} /> : null}
         </Grid>
     }
 
@@ -1071,6 +1179,7 @@ export default function ConfigManager() {
             {data["TYPE"] === "PRESS" || data["TYPE"] === "AUTO_FIRE" || data["TYPE"] === "CLICK" || data["TYPE"] === "WHEEL" ? <FixedIcon x={getPostionValueX(data["POS"][0])} y={getPostionValueY(data["POS"][1])} text={data["KEY"]} /> : null}
             {data["TYPE"] === "MULT_PRESS" ? <GroupFixedIcon pos_s={data["POS_S"].map(([x, y]) => [getPostionValueX(x), getPostionValueY(y)])} text={data["KEY"]} bgColor={"#00796B"} textColor={"#ffffff"} /> : null}
             {data["TYPE"] === "DRAG" ? <GroupFixedIcon pos_s={data["POS_S"].map(([x, y]) => [getPostionValueX(x), getPostionValueY(y)])} text={data["KEY"]} bgColor={"#3F51B5"} textColor={"#ffffff"} /> : null}
+            {data["TYPE"] === "SMART_TOGGLE" ? <GroupFixedIcon pos_s={data["POS_S"].map(([x, y]) => [getPostionValueX(x), getPostionValueY(y)])} text={data["KEY"]} bgColor={"#b53fb5ff"} textColor={"#ffffff"} /> : null}
         </div>
     }
 
