@@ -62,6 +62,7 @@ type TouchHandler struct {
 	// KEYBOARD_SWITCH_KEY_NAME  string
 	KEYBOARD_SWITCH_KEY_NAME_S map[string]bool //键盘切换映射的按键集合
 	map_switch_signal          chan bool
+	map_temporary_off          bool
 	measure_sensitivity_mode   bool  //计算模式
 	total_move_x               int32 //视角总移动距离x
 	total_move_y               int32 //视角总移动距离y
@@ -376,6 +377,7 @@ func InitTouchHandler(
 		// KEYBOARD_SWITCH_KEY_NAME:  config_json.Get("MOUSE").Get("SWITCH_KEY").MustString(),
 		KEYBOARD_SWITCH_KEY_NAME_S: KEYBOARD_SWITCH_KEY_NAME_S,
 		map_switch_signal:          map_switch_signal,
+		map_temporary_off:          false,
 		measure_sensitivity_mode:   measure_sensitivity_mode,
 		wheel_shift_enable:         config_json.Get("WHEEL").Get("SHIFT_RANGE_ENABLE").MustBool(),
 		wheel_shift_switch_enable:  config_json.Get("WHEEL").Get("SHIFT_RANGE_SWITCH_ENABLE").MustBool(),
@@ -729,7 +731,7 @@ func (self *TouchHandler) quick_click(keyname string) {
 
 func (self *TouchHandler) handel_rel_event(x int32, y int32, HWhell int32, Wheel int32) {
 	if x != 0 || y != 0 {
-		if self.map_on {
+		if self.map_on && !self.map_temporary_off {
 			self.handel_view_move(x, y)
 		} else {
 			self.u_input_control(UInput_mouse_move, x, y)
@@ -737,7 +739,7 @@ func (self *TouchHandler) handel_rel_event(x int32, y int32, HWhell int32, Wheel
 	}
 
 	if HWhell != 0 {
-		if self.map_on {
+		if self.map_on && !self.map_temporary_off {
 			if HWhell > 0 {
 				go self.quick_click("REL_HWHEEL_UP")
 			} else if HWhell < 0 {
@@ -748,7 +750,7 @@ func (self *TouchHandler) handel_rel_event(x int32, y int32, HWhell int32, Wheel
 		}
 	}
 	if Wheel != 0 {
-		if self.map_on {
+		if self.map_on && !self.map_temporary_off {
 			if Wheel > 0 {
 				go self.quick_click("REL_WHEEL_UP") //纵向滚轮向上
 			} else if Wheel < 0 {
@@ -760,21 +762,42 @@ func (self *TouchHandler) handel_rel_event(x int32, y int32, HWhell int32, Wheel
 	}
 }
 
-func (self *TouchHandler) execute_key_action(start time.Time, key_name string, up_down int32, action *simplejson.Json, state interface{}) {
+func (self *TouchHandler) execute_key_action(start time.Time, key_name string, up_down int32) {
+	action, exist := self.config.Get("KEY_MAPS").CheckGet(key_name)
+	if !exist {
+		logger.Debugf("key[%s]\t无触屏映射", key_name)
+		return
+	}
+	state, contains := self.key_action_state_save.Load(key_name)
+	// if (up_down == UP && !contains) || (up_down == DOWN && contains) {
+	// 	logger.Errorf("key[%s]%s\t状态异常，忽略此次事件", key_name, UDF[up_down])
+	// 	return
+	// }
+
 	action_type := action.Get("TYPE").MustString()
 	if key_name == "REL_WHEEL_DOWN" || key_name == "REL_WHEEL_UP" || key_name == "REL_HWHEEL_DOWN" || key_name == "REL_HWHEEL_UP" {
 		if action_type == "PRESS" || action_type == "AUTO_FIRE" || action_type == "MULT_PRESS" {
 			logger.Errorf("鼠标滚轮无法使用动作类型:%v", action_type) //二次保证
+			return
 		}
 	}
 	defer logger.Debugf("key[%s]%s\t%v\t%v", key_name, UDF[up_down], action, time.Since(start))
 	switch action_type {
 	case "PRESS": //按键的按下与释放直接映射为触屏的按下与释放
-		if up_down == DOWN {
+		switch up_down {
+		case DOWN:
+			if contains {
+				logger.Errorf("key[%s]%s\t状态异常，忽略此次事件", key_name, UDF[up_down])
+				return
+			}
 			x := int32(action.Get("POS").GetIndex(0).MustFloat64()*float64(self.rel_screen_x)) + rand_offset()
 			y := int32(action.Get("POS").GetIndex(1).MustFloat64()*float64(self.rel_screen_y)) + rand_offset()
 			self.key_action_state_save.Store(key_name, self.touch_require(x, y, true))
-		} else if up_down == UP {
+		case UP:
+			if !contains {
+				logger.Errorf("key[%s]%s\t状态异常，忽略此次事件", key_name, UDF[up_down])
+				return
+			}
 			tid := state.(int32)
 			self.touch_release(tid)
 			self.key_action_state_save.Delete(key_name)
@@ -791,7 +814,12 @@ func (self *TouchHandler) execute_key_action(start time.Time, key_name string, u
 		}
 
 	case "AUTO_FIRE": //连发 按下开始 松开结束 按照设置的间隔 持续点击
-		if up_down == DOWN {
+		switch up_down {
+		case DOWN:
+			if contains {
+				logger.Errorf("key[%s]%s\t状态异常，忽略此次事件", key_name, UDF[up_down])
+				return
+			}
 			x := int32(action.Get("POS").GetIndex(0).MustFloat64() * float64(self.rel_screen_x))
 			y := int32(action.Get("POS").GetIndex(1).MustFloat64() * float64(self.rel_screen_y))
 			down_time := action.Get("INTERVAL").GetIndex(0).MustInt()
@@ -809,13 +837,21 @@ func (self *TouchHandler) execute_key_action(start time.Time, key_name string, u
 				}
 				self.key_action_state_save.Delete(key_name)
 			})()
-
-		} else if up_down == UP {
+		case UP:
+			if !contains {
+				logger.Errorf("key[%s]%s\t状态异常，忽略此次事件", key_name, UDF[up_down])
+				return
+			}
 			self.key_action_state_save.Store(key_name, false)
 		}
 
 	case "MULT_PRESS": //多点触摸 按照顺序按下 松开再反向松开 实现类似一键开镜开火
-		if up_down == DOWN {
+		switch up_down {
+		case DOWN:
+			if contains {
+				logger.Errorf("key[%s]%s\t状态异常，忽略此次事件", key_name, UDF[up_down])
+				return
+			}
 			tid_save := make([]int32, 0)
 			release_signal := make(chan bool, 16)
 			self.key_action_state_save.Store(key_name, release_signal)
@@ -834,7 +870,11 @@ func (self *TouchHandler) execute_key_action(start time.Time, key_name string, u
 					time.Sleep(time.Duration(8) * time.Millisecond)
 				}
 			})()
-		} else if up_down == UP {
+		case UP:
+			if !contains {
+				logger.Errorf("key[%s]%s\t状态异常，忽略此次事件", key_name, UDF[up_down])
+				return
+			}
 			state.(chan bool) <- true
 			//按下立即创建channel 并保存状态
 			//松开拿到的channel 并发送信号
@@ -862,11 +902,14 @@ func (self *TouchHandler) execute_key_action(start time.Time, key_name string, u
 				self.touch_move(tid, end_x, end_y, true)
 				self.touch_release(tid)
 			})()
-		} else if up_down == UP {
-
 		}
 	case "WHEEL": //轮盘打药或者小眼睛视野
-		if up_down == DOWN {
+		switch up_down {
+		case DOWN:
+			if contains {
+				logger.Errorf("key[%s]%s\t状态异常，忽略此次事件", key_name, UDF[up_down])
+				return
+			}
 			x := int32(action.Get("POS").GetIndex(0).MustFloat64()*float64(self.rel_screen_x)) + rand_offset()
 			y := int32(action.Get("POS").GetIndex(1).MustFloat64()*float64(self.rel_screen_y)) + rand_offset()
 			self.key_action_state_save.Store(key_name, true)
@@ -876,7 +919,11 @@ func (self *TouchHandler) execute_key_action(start time.Time, key_name string, u
 				self.view_id = self.touch_release(self.view_id)
 			}
 			self.view_lock.Unlock()
-		} else if up_down == UP {
+		case UP:
+			if !contains {
+				logger.Errorf("key[%s]%s\t状态异常，忽略此次事件", key_name, UDF[up_down])
+				return
+			}
 			self.key_action_state_save.Delete(key_name)
 			self.view_lock.Lock()
 			self.view_action_select = struct{ x, y int32 }{-1, -1}
@@ -884,6 +931,64 @@ func (self *TouchHandler) execute_key_action(start time.Time, key_name string, u
 				self.view_id = self.touch_release(self.view_id)
 			}
 			self.view_lock.Unlock()
+		}
+	case "SMART_TOGGLE":
+		separat := action.Get("SEPARAT").MustBool() //双击在一次按下抬起完成 还是一次按键对应一个点
+		release_mouse := action.Get("RELEASE_MOUSE").MustBool()
+		x_start := int32(action.Get("POS_S").GetIndex(0).GetIndex(0).MustFloat64()*float64(self.rel_screen_x)) + rand_offset()
+		y_start := int32(action.Get("POS_S").GetIndex(0).GetIndex(1).MustFloat64()*float64(self.rel_screen_y)) + rand_offset()
+		x_end := int32(action.Get("POS_S").GetIndex(1).GetIndex(0).MustFloat64()*float64(self.rel_screen_x)) + rand_offset()
+		y_end := int32(action.Get("POS_S").GetIndex(1).GetIndex(1).MustFloat64()*float64(self.rel_screen_y)) + rand_offset()
+		if separat { //两次操作，按下第一次 点击，然后可以控制鼠标  第二次点击另一位置，然后再转为控制视角
+			if up_down == DOWN {
+				if !contains {
+					go (func() {
+						tid := self.touch_require(x_start, y_start, true)
+						time.Sleep(time.Duration(8) * time.Millisecond) //8ms 120HZ下一次
+						self.touch_release(tid)
+						self.key_action_state_save.Store(key_name, true)
+						if release_mouse {
+							self.map_temporary_off = true
+							self.view_lock.Lock()
+							self.view_id = self.touch_release(self.view_id)
+							self.view_lock.Unlock()
+						}
+					})()
+				} else {
+					go (func() {
+						tid := self.touch_require(x_end, y_end, true)
+						time.Sleep(time.Duration(8) * time.Millisecond) //8ms 120HZ下一次
+						self.touch_release(tid)
+						self.key_action_state_save.Delete(key_name)
+						if release_mouse {
+							self.map_temporary_off = false
+						}
+					})()
+				}
+			}
+		} else {
+			if up_down == DOWN {
+				go (func() {
+					tid := self.touch_require(x_start, y_start, true)
+					time.Sleep(time.Duration(8) * time.Millisecond) //8ms 120HZ下一次
+					self.touch_release(tid)
+					if release_mouse {
+						self.map_temporary_off = true
+						self.view_lock.Lock()
+						self.view_id = self.touch_release(self.view_id)
+						self.view_lock.Unlock()
+					}
+				})()
+			} else {
+				go (func() {
+					tid := self.touch_require(x_end, y_end, true)
+					time.Sleep(time.Duration(8) * time.Millisecond) //8ms 120HZ下一次
+					self.touch_release(tid)
+					if release_mouse {
+						self.map_temporary_off = false
+					}
+				})()
+			}
 		}
 	}
 }
@@ -893,7 +998,7 @@ func (self *TouchHandler) switch_map_mode() {
 	self.total_move_y = 0                           //总移动距离清零
 	self.view_id = self.touch_release(self.view_id) //视角id释放
 	self.key_action_state_save.Range(func(key, value interface{}) bool {
-		self.execute_key_action(time.Now(), key.(string), UP, self.config.Get("KEY_MAPS").Get(key.(string)), value)
+		self.execute_key_action(time.Now(), key.(string), UP)
 		logger.Infof("已释放key:%s", key.(string))
 		return true
 	})
@@ -909,18 +1014,16 @@ func (self *TouchHandler) switch_map_mode() {
 func (self *TouchHandler) handel_key_up_down(key_name string, up_down int32, dev_name string) {
 	if key_name == "" {
 		return
-	}
+	} // 不处理未知按键
 	if key_name == "BTN_SELECT" {
-		if up_down == DOWN || up_down == UP {
-			self.BTN_SELECT_UP_DOWN = up_down
-		}
+		self.BTN_SELECT_UP_DOWN = up_down
 	}
 	if self.BTN_SELECT_UP_DOWN == DOWN {
 		if key_name == "BTN_RS" && up_down == UP {
 			self.switch_map_mode()
 			return
 		}
-	}
+	} // 手柄切换映射 组合键 先按下select，再按下rs切换映射模式
 
 	if self.KEYBOARD_SWITCH_KEY_NAME_S[key_name] {
 		if up_down == UP {
@@ -928,58 +1031,53 @@ func (self *TouchHandler) handel_key_up_down(key_name string, up_down int32, dev
 		}
 		return
 	}
-
 	if self.map_on {
-		for i := 0; i < 4; i++ {
-			if self.wheel_wasd[i] == key_name {
-				if up_down == DOWN {
-					self.wasd_up_down_statues[i] = true
-				} else if up_down == UP {
-					self.wasd_up_down_statues[i] = false
-				}
-				return
-			}
-		}
-		if self.wheel_shift_enable && key_name == "KEY_LEFTSHIFT" {
-			if self.wheel_shift_switch_enable { //切换模式
-				if up_down == DOWN {
-					self.wasd_up_down_statues[4] = !self.wasd_up_down_statues[4]
-				}
-			} else { //长按模式
-				if up_down == DOWN {
-					self.wasd_up_down_statues[4] = true
-				} else if up_down == UP {
-					self.wasd_up_down_statues[4] = false
-				}
-			}
-			return
-		}
-
-		if self.measure_sensitivity_mode && up_down == UP {
-			if key_name == "KEY_LEFT" {
-				self.handel_view_move(-1, 0)
-				return
-			} else if key_name == "KEY_RIGHT" {
-				self.handel_view_move(1, 0)
-				return
-			} else if key_name == "KEY_UP" {
-				self.handel_view_move(0, -1)
-				return
-			} else if key_name == "KEY_DOWN" {
-				self.handel_view_move(0, 1)
-				return
-			}
-		}
-		if action, exist := self.config.Get("KEY_MAPS").CheckGet(key_name); exist {
-			state, contains := self.key_action_state_save.Load(key_name)
-			if (up_down == UP && !contains) || (up_down == DOWN && contains) {
-				logger.Errorf("key[%s]%s\t状态异常，忽略此次事件", key_name, UDF[up_down])
-			} else {
-				// logger.Debugf("key[%s]%s\t%v\t%v", key_name, UDF[up_down], action, state)
-				self.execute_key_action(time.Now(), key_name, up_down, action, state)
+		if self.map_temporary_off && (key_name == "BTN_LEFT" || key_name == "BTN_RIGHT" || key_name == "BTN_MIDDLE" || key_name == "BTN_FORWARD" || key_name == "BTN_BACK") {
+			if code, exist := friendly_name_2_keycode[key_name]; exist {
+				self.u_input_control(UInput_key_event, int32(code), int32(up_down))
 			}
 		} else {
-			logger.Debugf("key[%s]\t无触屏映射", key_name)
+			for i := 0; i < 4; i++ {
+				if self.wheel_wasd[i] == key_name {
+					if up_down == DOWN {
+						self.wasd_up_down_statues[i] = true
+					} else if up_down == UP {
+						self.wasd_up_down_statues[i] = false
+					}
+					return
+				}
+			}
+			if self.wheel_shift_enable && key_name == "KEY_LEFTSHIFT" {
+				if self.wheel_shift_switch_enable { //切换模式
+					if up_down == DOWN {
+						self.wasd_up_down_statues[4] = !self.wasd_up_down_statues[4]
+					}
+				} else { //长按模式
+					if up_down == DOWN {
+						self.wasd_up_down_statues[4] = true
+					} else if up_down == UP {
+						self.wasd_up_down_statues[4] = false
+					}
+				}
+				return
+			}
+
+			if self.measure_sensitivity_mode && up_down == UP {
+				if key_name == "KEY_LEFT" {
+					self.handel_view_move(-1, 0)
+					return
+				} else if key_name == "KEY_RIGHT" {
+					self.handel_view_move(1, 0)
+					return
+				} else if key_name == "KEY_UP" {
+					self.handel_view_move(0, -1)
+					return
+				} else if key_name == "KEY_DOWN" {
+					self.handel_view_move(0, 1)
+					return
+				}
+			}
+			self.execute_key_action(time.Now(), key_name, up_down)
 		}
 	} else {
 		if jsconfig, exist := self.joystickInfo[dev_name]; exist {
