@@ -158,7 +158,7 @@
         }
         window.onload = () => {
             log('请将您的 ESP32-S3 设备连接到电脑，并点击下方按钮。');
-            log('连接串口或USB口，并进入 Bootloader 模式 (按住BOOT键，再按一下RST键)。');
+            log('连接串口（COM）或者在按住BOOT键的情况下，插入USB口');
         };
         flashButton.addEventListener('click', async () => {
             flashButton.disabled = true; // 防止重复点击

@@ -246,6 +246,7 @@ const (
 	ABS_MT_PRESSURE    = 0x3a
 	ABS_MT_SLOT        = 0x2F
 	ABS_MT_TRACKING_ID = 0x39
+	SYN_MT_REPORT      = 0x02
 	EV_SYN             = 0x00
 	EV_KEY             = 0x01
 	EV_REL             = 0x02

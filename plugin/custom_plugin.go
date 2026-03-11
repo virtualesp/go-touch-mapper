@@ -287,8 +287,8 @@ func (cw *CustomWheel) get_wheel_move_target(wheel_pos_x, wheel_pos_y, wheel_axi
 		if wheel_axis_x*wheel_asix_y != 0 {
 			usingRadius = usingRadius * 707 / 1000
 		}
-		cw.target_x = cw.centerX + wheel_axis_x*usingRadius + int32(rand.Float64()*CurveStrength)
-		cw.target_y = cw.center_y + wheel_asix_y*usingRadius + int32(rand.Float64()*CurveStrength)
+		cw.target_x = cw.centerX + wheel_axis_x*usingRadius + int32(rand.Float64()*CurveStrength*100)
+		cw.target_y = cw.center_y + wheel_asix_y*usingRadius + int32(rand.Float64()*CurveStrength*100)
 		if cw.target_x < 0 {
 			cw.target_x = 0
 		} else if cw.target_x > cw.screen_x {
