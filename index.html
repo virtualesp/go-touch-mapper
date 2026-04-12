@@ -130,7 +130,7 @@
         const confirmBtn = document.getElementById('confirmBtn');
         const cancelBtn = document.getElementById('cancelBtn');
 
-        const FIRMWARE_PATH = 'hid_touch/build/esp32.esp32.esp32s3/hid_touch.ino.merged.bin';
+        const FIRMWARE_PATH = 'hid_touch/build/tusb_hid_merged.bin';
         const BAUD_RATE = 921600; // 使用较高的波特率以提高烧录速度
         function log(message, id) {
             let p = id ? document.getElementById(id) : null;

@@ -164,13 +164,17 @@ Arguments:
 
 * 刷入hid_touch.ino固件   [点击在线烧录](https://riderlty.github.io/go-touch-mapper/)
 
+* 连接设备，进入[配置页面](https://riderlty.github.io/dualsense-tester/)，在未配置的情况下为模拟DS5手柄，可通过短按boot简单测试，长按boot全量测试。
+
+* DS5模式下，部分安卓设备不识别，选择HID 模式为自定义模式，然后手动配置硬件信息，全部写入后重启保存。
+
 * 将键鼠手柄与ESP32-s3的串口连接到例如树莓派之类的linux设备上，USB口连接到被控设备
 
 * 执行 ```ls /dev | grep ttyACM``` 查看串口设备
 
 * 使用--tty-path指定串口设备，--rotation 指定旋转方向，例如：```./go-touch-mapper--tty-path /dev/ttyACM0 ``` 
 
-* 实测回报率在1000hz以下无明显延迟，超过1000hz会出现操作丢失。
+* 测试回报率在1000hz以下无明显延迟，超过1000hz会出现操作丢失。
 
 * 部分设备会出现输入迟缓的情况，建议降低输入设备的回报率到500hz或者更低。
 
