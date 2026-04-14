@@ -941,7 +941,7 @@ func main() {
 			logger.Info("触屏控制将使用串口控制外接的HID设备发送至主机")
 			logger.Infof("串口路径：%s", *usingHIDTouchTtyPath)
 			logger.Infof("触屏方向：%d", *usingDeviceRotation)
-			port, err := OpenSerialWritePipe(*usingHIDTouchTtyPath, 2000000)
+			port, err := OpenSerialWritePipe(*usingHIDTouchTtyPath, 115200)
 			if err != nil {
 				logger.Errorf("无法打开串口: %v", err)
 				os.Exit(1)
