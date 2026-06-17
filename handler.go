@@ -300,6 +300,16 @@ func InitTouchHandler(
 	screenSizeY := config_json.Get("SCREEN").Get("SIZE").GetIndex(1).MustInt()
 	global_screen_x = int32(screenSizeX)
 	global_screen_y = int32(screenSizeY)
+
+	// 更新外接屏幕缩放函数
+	if global_external_screen_scale_enabled {
+		global_external_screen_scale_func = createScreenScaler(
+			int32(screenSizeX), int32(screenSizeY),
+			global_external_screen_x, global_external_screen_y,
+		)
+		logger.Infof("外接屏幕缩放已更新: 设备%dx%d -> 屏幕%dx%d", screenSizeX, screenSizeY, global_external_screen_x, global_external_screen_y)
+	}
+
 	KEYBOARD_SWITCH_KEY_NAME_S := make(map[string]bool)
 	for _, key := range config_json.Get("MOUSE").Get("SWITCH_KEYS").MustStringArray() {
 		if key != "" {
@@ -402,6 +412,16 @@ func (self *TouchHandler) reloadConfigure(mapperFilePath string) {
 	screenSizeY := config_json.Get("SCREEN").Get("SIZE").GetIndex(1).MustInt()
 	global_screen_x = int32(screenSizeX)
 	global_screen_y = int32(screenSizeY)
+
+	// 更新外接屏幕缩放函数
+	if global_external_screen_scale_enabled {
+		global_external_screen_scale_func = createScreenScaler(
+			int32(screenSizeX), int32(screenSizeY),
+			global_external_screen_x, global_external_screen_y,
+		)
+		logger.Infof("外接屏幕缩放已更新: 设备%dx%d -> 屏幕%dx%d", screenSizeX, screenSizeY, global_external_screen_x, global_external_screen_y)
+	}
+
 	self.config = config_json
 	self.screen_x = int32(screenSizeX)
 	self.screen_y = int32(screenSizeY)

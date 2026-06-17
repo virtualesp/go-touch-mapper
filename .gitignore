@@ -7,3 +7,4 @@ go-touch-mapper-gh-pages/build
 default.json
 go-touch-mapper_amd64
 .fuse_hidden*
+*.bin

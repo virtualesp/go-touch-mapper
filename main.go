@@ -248,6 +248,10 @@ var global_is_wordking_remote bool = false // 是否正在远程控制 并且无
 var global_device_orientation int32 = 0
 var global_screen_x int32 = 1000
 var global_screen_y int32 = 1000
+var global_external_screen_x int32 = 1000
+var global_external_screen_y int32 = 1000
+var global_external_screen_scale_enabled = false
+var global_external_screen_scale_func func(x, y int32) (int32, int32)
 
 func get_device_orientation() int32 {
 	output, err := exec.Command("sh", "-c", "dumpsys input").Output()
@@ -282,21 +286,6 @@ func listen_device_orientation() {
 			}
 			time.Sleep(time.Duration(1) * time.Second)
 		}
-	}
-}
-
-func rotateAbsoluteXY(x, y int32) (int32, int32) { //根据方向旋转坐标
-	switch global_device_orientation {
-	case 0:
-		return x, y
-	case 1:
-		return 0x7ffffffe - y, x
-	case 2:
-		return 0x7ffffffe - x, 0x7ffffffe - y
-	case 3:
-		return y, 0x7ffffffe - x
-	default:
-		return x, y
 	}
 }
 
@@ -711,6 +700,12 @@ func main() {
 		Help:     "模拟光标显示程序地址,默认本机6533端口,输入IP:PORT,例如192.168.3.7:6533,或者仅输入IP使用默认端口6533",
 	})
 
+	var external_screen *string = parser.String("e", "external-screen", &argparse.Options{
+		Required: false,
+		Default:  "",
+		Help:     "外接屏幕分辨率,格式: 宽x高 例如 3440x1440,用于hid和otg模式下的坐标缩放",
+	})
+
 	var view_release_timeout *int = parser.Int("", "auto-release", &argparse.Options{
 		Required: false,
 		Help:     "触发视角自动释放所需的静止ms数,50ms为检查单位,置0禁用",
@@ -740,6 +735,29 @@ func main() {
 	}
 	uinput_keyboard_mouse_dev_name = fmt.Sprintf("EVO80_Keyboard_%s", go_build_version)
 	logger.Infof("当前构建版本: %v", go_build_version)
+
+	// 解析外接屏幕参数
+	if *external_screen != "" {
+		parts := strings.Split(*external_screen, "x")
+		if len(parts) != 2 {
+			logger.Errorf("外接屏幕参数格式错误,应为 宽x高 例如 3440x1440")
+			os.Exit(1)
+		}
+		w, err := strconv.Atoi(parts[0])
+		if err != nil || w <= 0 {
+			logger.Errorf("外接屏幕宽度参数错误: %s", parts[0])
+			os.Exit(1)
+		}
+		h, err := strconv.Atoi(parts[1])
+		if err != nil || h <= 0 {
+			logger.Errorf("外接屏幕高度参数错误: %s", parts[1])
+			os.Exit(1)
+		}
+		global_external_screen_x = int32(w)
+		global_external_screen_y = int32(h)
+		global_external_screen_scale_enabled = true
+		logger.Infof("外接屏幕模式已启用: %dx%d", w, h)
+	}
 
 	if *debug_mode {
 		logger.WithDebug()

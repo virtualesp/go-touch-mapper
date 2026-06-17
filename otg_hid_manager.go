@@ -39,6 +39,10 @@ func handel_touch_using_otg_manager() touch_control_func {
 		switch control_data.action {
 		case TouchActionRequire, TouchActionMove:
 			x, y := rotateAbsoluteXY(control_data.x, control_data.y)
+			// 应用外接屏幕缩放
+			if global_external_screen_scale_enabled && global_external_screen_scale_func != nil {
+				x, y = global_external_screen_scale_func(x, y)
+			}
 			setReport(0x01, uint8(control_data.id), uint32(x), uint32(y))
 			touch_fd.Write(buf[:])
 		case TouchActionRelease:
