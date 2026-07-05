@@ -24,6 +24,7 @@ import {
 } from "./UIcomponents"
 import { produce } from "immer"
 import FullscreenIcon from '@mui/icons-material/Fullscreen';
+import { IS_GO_BACKEND } from '../buildTarget';
 
 function copyToClipboard(text) {
     let transfer = document.createElement('input');
@@ -434,26 +435,30 @@ export default function ConfigManager() {
                     alignItems="center"
                     spacing={"10px"}
                 >
-                    <Grid item xs={6}>
-                        <Button
-                            onClick={() => { getRemoteApiImg("/screen.png") }}
-                            variant="outlined"
-                            sx={{
-                                width: "100%",
-                                marginTop: "10px",
-                            }}
-                        >{"获取截图"}</Button>
-                    </Grid>
-                    <Grid item xs={6}>
-                        <Button
-                            onClick={() => { setTimeout(() => { getRemoteApiImg("/screen.png") }, 5000) }}
-                            variant="outlined"
-                            sx={{
-                                width: "100%",
-                                marginTop: "10px",
-                            }}
-                        >{"5s后获取截图"}</Button>
-                    </Grid>
+                    {IS_GO_BACKEND && (
+                        <>
+                            <Grid item xs={6}>
+                                <Button
+                                    onClick={() => { getRemoteApiImg("/screen.png") }}
+                                    variant="outlined"
+                                    sx={{
+                                        width: "100%",
+                                        marginTop: "10px",
+                                    }}
+                                >{"获取截图"}</Button>
+                            </Grid>
+                            <Grid item xs={6}>
+                                <Button
+                                    onClick={() => { setTimeout(() => { getRemoteApiImg("/screen.png") }, 5000) }}
+                                    variant="outlined"
+                                    sx={{
+                                        width: "100%",
+                                        marginTop: "10px",
+                                    }}
+                                >{"5s后获取截图"}</Button>
+                            </Grid>
+                        </>
+                    )}
                     <Grid item xs={12}>
                         <Button
                             onClick={() => { document.getElementById('fileInput').click(); }}
@@ -464,7 +469,9 @@ export default function ConfigManager() {
                         >{"上传截图"}</Button>
                     </Grid>
                 </Grid>
-                <Button
+                {
+                    IS_GO_BACKEND && (
+                        <Button
                     onClick={exportJSON}
                     variant="outlined"
                     sx={{
@@ -472,7 +479,8 @@ export default function ConfigManager() {
                         marginTop: "10px",
                     }}
                 >{exportButtonText}</Button>
-
+                    )
+                }
                 <Grid
                     container
                     direction="row"

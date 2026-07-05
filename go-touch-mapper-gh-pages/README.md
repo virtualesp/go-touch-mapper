@@ -1,70 +1,83 @@
-# Getting Started with Create React App
+# Touch Mapper Frontend
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+这个目录是 Touch Mapper 的前端配置页面，使用 Vite 构建。
 
-## Available Scripts
+## 开发
 
-In the project directory, you can run:
+```bash
+npm install
+npm run dev
+```
 
-### `npm start`
+开发服务器默认由 Vite 启动，脚本已配置为监听 `0.0.0.0`，方便在局域网或容器环境访问。
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+## 构建目标
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+构建时会注入 `BUILD_TARGET`，代码中可以从 `src/buildTarget.js` 获取当前目标：
 
-### `npm test`
+```js
+import { BUILD_TARGET, IS_GO_BACKEND, IS_STATIC_TARGET, IS_PICO_TARGET } from './buildTarget';
+```
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+当前允许的目标值是：
 
-### `npm run build`
+```text
+go
+static
+pico
+```
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+未指定目标时会提示并使用默认值 `go`；指定了不在允许范围内的目标时，构建会失败。
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+推荐直接使用目标值作为 Vite mode 构建不同场景的单文件产物：
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+```bash
+npm run build:go      # BUILD_TARGET=go
+npm run build:static  # BUILD_TARGET=static
+npm run build:pico    # BUILD_TARGET=pico
+```
 
-### `npm run eject`
+开发服务器也可以直接指定目标 mode：
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+```bash
+yarn start --mode go
+yarn start --mode static
+yarn start --mode pico
+```
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+或者使用脚本别名：
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+```bash
+yarn start:go     # http://localhost:5173，标题 TouchMapper:go
+yarn start:static # http://localhost:5174，标题 TouchMapper:static
+yarn start:pico   # http://localhost:5175，标题 TouchMapper:pico
+```
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+如果需要同时启动三个模式的开发服务器：
 
-## Learn More
+```bash
+yarn start_all
+```
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+也可以直接覆盖目标值：
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+```bash
+VITE_BUILD_TARGET=static npm run build
+BUILD_TARGET=pico npm run build
+```
 
-### Code Splitting
+## 单文件构建
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+生产构建输出到 `build/` 目录，并通过 `vite-plugin-singlefile` 将 JavaScript 和 CSS 内联到单个文件：
 
-### Analyzing the Bundle Size
+```text
+build/index.html
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+这个单文件可以直接作为静态页面发布。
 
-### Making a Progressive Web App
+## 预览生产构建
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+```bash
+npm run preview
+```
