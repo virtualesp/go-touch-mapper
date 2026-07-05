@@ -86,6 +86,15 @@ export default defineConfig(({ mode }) => {
       __BUILD_TARGETS__: JSON.stringify(BUILD_TARGETS),
     },
     plugins: [react(), buildTargetTitle(buildTarget), viteSingleFile(), minifySingleFileHtml()],
+    server: {
+      proxy: buildTarget === 'pico' ? {
+        '/': {
+          target: 'http://192.168.3.117',
+          changeOrigin: true,
+          ws: true,
+        },
+      } : undefined,
+    },
     build: {
       outDir: 'build',
       emptyOutDir: true,

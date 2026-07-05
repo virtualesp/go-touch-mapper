@@ -25,6 +25,8 @@ import {
 import { produce } from "immer"
 import FullscreenIcon from '@mui/icons-material/Fullscreen';
 import { IS_GO_BACKEND, IS_PICO_TARGET, IS_STATIC_TARGET } from '../buildTarget';
+import SlotManagerDialog from "./SlotManagerDialog";
+import { getSlotStatus, readSlot, uploadToSlot, activateSlot } from "../utils/picoApi";
 
 function copyToClipboard(text) {
     let transfer = document.createElement('input');
@@ -246,6 +248,8 @@ export default function ConfigManager() {
     const [exportButtonText, setExportButtonText] = useState("更新配置")
     const [selectKEY, setSelectKEY] = useState(null)
     const [configureName, setConfigureName] = useState("default")
+    const [slotDialogOpen, setSlotDialogOpen] = useState(false)
+    const [currentSlotIndex, setCurrentSlotIndex] = useState(null)
 
     // const [uploadButton, setUploadButton] = useState(true);
     const [imgUrl, setImgUrl] = useState(config["IMG"]);
@@ -304,6 +308,37 @@ export default function ConfigManager() {
                 console.error("解析JSON文件失败:", error);
             }
         };
+    }
+
+    const handleSlotSelect = async ({ config: slotConfig, name, slotIndex }) => {
+        if (slotConfig) {
+            setConfig(slotConfig);
+        } else {
+            // 空槽位，使用当前配置作为默认配置
+            // 或者保持当前配置不变
+        }
+        setConfigureName(name);
+        setCurrentSlotIndex(slotIndex);
+        setSlotDialogOpen(false);
+    }
+
+    const handleUpdateConfig = async () => {
+        if (currentSlotIndex === null) {
+            alert("请先选择一个槽位");
+            setSlotDialogOpen(true);
+            return;
+        }
+        try {
+            setExportButtonText("正在上传...");
+            await uploadToSlot(currentSlotIndex, config, configureName);
+            await activateSlot(currentSlotIndex);
+            setExportButtonText("上传成功");
+            setTimeout(() => setExportButtonText("更新"), 2000);
+        } catch (err) {
+            console.error("上传配置失败:", err);
+            setExportButtonText("上传失败");
+            setTimeout(() => setExportButtonText("更新"), 2000);
+        }
     }
 
     const getRemoteApiImg = async (url) => {
@@ -521,7 +556,7 @@ export default function ConfigManager() {
                  
                                 <Grid item xs={12}>
                                 <Button
-                                    onClick={() => { document.getElementById('configFileInput').click(); }}
+                                    onClick={() => { setSlotDialogOpen(true); }}
                                     variant="outlined"
                                     sx={{
                                         width: "100%",
@@ -603,25 +638,13 @@ export default function ConfigManager() {
                             </Grid >
                             <Grid item xs={4}>
                                 <Button
-                                    onClick={() => {
-                                        // const exportData = config;
-                                        // const dataStr = JSON.stringify(exportData, null, 2);
-                                        // const blob = new Blob([dataStr], { type: "application/json" });
-                                        // const url = URL.createObjectURL(blob);
-                                        // const link = document.createElement('a');
-                                        // link.href = url;
-                                        // link.download = `${configureName}.json`;
-                                        // document.body.appendChild(link);
-                                        // link.click();
-                                        // document.body.removeChild(link);
-                                        // URL.revokeObjectURL(url);
-                                    }}
+                                    onClick={handleUpdateConfig}
                                     variant="outlined"
                                     sx={{
                                         width: "100%",
                                         marginTop: "10px",
                                     }}
-                                >{"更新"}</Button>
+                                >{exportButtonText}</Button>
 
                             </Grid >
 
@@ -1329,6 +1352,25 @@ export default function ConfigManager() {
                 .catch(err => {
                     console.log(err)
                 })
+        } else if (IS_PICO_TARGET) {
+            // 加载当前使用的槽位配置
+            getSlotStatus()
+                .then(status => {
+                    setCurrentSlotIndex(status.current)
+                    if (status.slots[status.current]?.present) {
+                        return readSlot(status.current)
+                    }
+                    return null
+                })
+                .then(data => {
+                    if (data) {
+                        setConfig(data.config)
+                        setConfigureName(data.name)
+                    }
+                })
+                .catch(err => {
+                    console.error("加载槽位配置失败:", err)
+                })
         }
     }, [])
 
@@ -1574,6 +1616,12 @@ export default function ConfigManager() {
         />
         <ViewShow x={getPostionValueX(config["MOUSE"]["POS"][0])} y={getPostionValueY(config["MOUSE"]["POS"][1])} range={getPostionValueX(config["MOUSE"]["RANGE"])} />
         <input id="fileInput" type="file" style={{ display: "none" }} accept="image/*" onChange={handleFileChange} ></input>
+        <SlotManagerDialog
+            open={slotDialogOpen}
+            onClose={() => setSlotDialogOpen(false)}
+            onSelectSlot={handleSlotSelect}
+            currentSlotIndex={currentSlotIndex}
+        />
 
     </div>
 }
