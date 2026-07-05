@@ -24,7 +24,7 @@ import {
 } from "./UIcomponents"
 import { produce } from "immer"
 import FullscreenIcon from '@mui/icons-material/Fullscreen';
-import { IS_GO_BACKEND } from '../buildTarget';
+import { IS_GO_BACKEND, IS_PICO_TARGET, IS_STATIC_TARGET } from '../buildTarget';
 
 function copyToClipboard(text) {
     let transfer = document.createElement('input');
@@ -245,6 +245,7 @@ export default function ConfigManager() {
     const [pluginValue, setPluginValue] = useState({})
     const [exportButtonText, setExportButtonText] = useState("更新配置")
     const [selectKEY, setSelectKEY] = useState(null)
+    const [configureName, setConfigureName] = useState("default")
 
     // const [uploadButton, setUploadButton] = useState(true);
     const [imgUrl, setImgUrl] = useState(config["IMG"]);
@@ -269,6 +270,39 @@ export default function ConfigManager() {
             const bas64STR = await imageUrlToBase64(this.result)
             setConfig(produce(draft => { draft.IMG = bas64STR }))
             document.body.requestFullscreen();
+        };
+    }
+
+    const handelUserUploadJSON = (e) => {
+        const file = document.getElementById('configFileInput').files[0];
+        if (!file) return;
+        const reads = new FileReader();
+        reads.readAsText(file);
+        reads.onload = async function (e) {
+            try {
+                const jsonData = JSON.parse(this.result);
+                if (jsonData["IMG"] && jsonData["IMG"].length > 10) {
+                    setConfig(jsonData)
+                } else {
+                    if (
+                        jsonData["SCREEN"]["SIZE"][0] === config["SCREEN"]["SIZE"][0]
+                        && jsonData["SCREEN"]["SIZE"][1] === config["SCREEN"]["SIZE"][1]
+                    ) {
+                        console.log("上传的JSON配置无图片,但是屏幕尺寸与当前配置尺寸一致");
+                        jsonData["IMG"] = config["IMG"]
+                        setConfig(jsonData)
+                    } else {
+                        console.log("上传的JSON配置无图片,但是屏幕尺寸与当前配置尺寸不一致");
+                        jsonData["IMG"] = config["IMG"]
+                        alert("上传的JSON配置无图片,且与当前截图尺寸不一致,请务必上传截图")
+                        setConfig(jsonData)
+                    }
+
+                }
+                console.log("上传的JSON配置:", jsonData);
+            } catch (error) {
+                console.error("解析JSON文件失败:", error);
+            }
         };
     }
 
@@ -468,17 +502,130 @@ export default function ConfigManager() {
                             }}
                         >{"上传截图"}</Button>
                     </Grid>
+                    {
+                        (IS_PICO_TARGET || IS_STATIC_TARGET) && (
+                            <Grid item xs={12}>
+                                <Button
+                                    onClick={() => { document.getElementById('configFileInput').click(); }}
+                                    variant="outlined"
+                                    sx={{
+                                        width: "100%",
+                                    }}
+                                >{"上传配置文件"}</Button>
+                            </Grid>
+                        )
+                    }
+
+                    {
+                        (IS_PICO_TARGET) && (
+                 
+                                <Grid item xs={12}>
+                                <Button
+                                    onClick={() => { document.getElementById('configFileInput').click(); }}
+                                    variant="outlined"
+                                    sx={{
+                                        width: "100%",
+                                    }}
+                                >{"选择槽位"}</Button>
+                            </Grid>
+                        )
+                    }
+
+
                 </Grid>
                 {
                     IS_GO_BACKEND && (
                         <Button
-                    onClick={exportJSON}
-                    variant="outlined"
-                    sx={{
-                        width: "100%",
-                        marginTop: "10px",
-                    }}
-                >{exportButtonText}</Button>
+                            onClick={exportJSON}
+                            variant="outlined"
+                            sx={{
+                                width: "100%",
+                                marginTop: "10px",
+                            }}
+                        >{exportButtonText}</Button>
+                    )
+                }
+
+                {
+                    IS_STATIC_TARGET && (
+                        <Grid
+                            container
+                            direction="row"
+                            justifyContent="space-evenly"
+                            alignItems="center"
+                            spacing={"10px"}
+                        >
+                            <Grid item xs={8}>
+                                <CostumedInput defaultValue={configureName} onCommit={(value) => {
+                                    setConfigureName(value)
+                                }} width="100%" all={true} />
+                            </Grid >
+                            <Grid item xs={4}>
+                                <Button
+                                    onClick={() => {
+                                        const exportData = config;
+                                        const dataStr = JSON.stringify(exportData, null, 2);
+                                        const blob = new Blob([dataStr], { type: "application/json" });
+                                        const url = URL.createObjectURL(blob);
+                                        const link = document.createElement('a');
+                                        link.href = url;
+                                        link.download = `${configureName}.json`;
+                                        document.body.appendChild(link);
+                                        link.click();
+                                        document.body.removeChild(link);
+                                        URL.revokeObjectURL(url);
+                                    }}
+                                    variant="outlined"
+                                    sx={{
+                                        width: "100%",
+                                        marginTop: "10px",
+                                    }}
+                                >{"导出"}</Button>
+
+                            </Grid >
+
+                        </Grid>
+                    )
+                }
+                {
+                    IS_PICO_TARGET && (
+                        <Grid
+                            container
+                            direction="row"
+                            justifyContent="space-evenly"
+                            alignItems="center"
+                            spacing={"10px"}
+                        >
+                            <Grid item xs={8}>
+                                <CostumedInput defaultValue={configureName} onCommit={(value) => {
+                                    setConfigureName(value)
+                                }} width="100%" all={true} />
+                            </Grid >
+                            <Grid item xs={4}>
+                                <Button
+                                    onClick={() => {
+                                        // const exportData = config;
+                                        // const dataStr = JSON.stringify(exportData, null, 2);
+                                        // const blob = new Blob([dataStr], { type: "application/json" });
+                                        // const url = URL.createObjectURL(blob);
+                                        // const link = document.createElement('a');
+                                        // link.href = url;
+                                        // link.download = `${configureName}.json`;
+                                        // document.body.appendChild(link);
+                                        // link.click();
+                                        // document.body.removeChild(link);
+                                        // URL.revokeObjectURL(url);
+                                    }}
+                                    variant="outlined"
+                                    sx={{
+                                        width: "100%",
+                                        marginTop: "10px",
+                                    }}
+                                >{"更新"}</Button>
+
+                            </Grid >
+
+                        </Grid>
                     )
                 }
                 <Grid
@@ -963,10 +1110,10 @@ export default function ConfigManager() {
                 </Grid>
                 <Grid item xs={9} sx={{ marginTop: "12px" }}>
                     <Typography>{
-                        data["SEPARAT"] === true ? 
-                        "按键点击释放光标，再点击继续映射":
-                        "按键按下释放光标，抬起继续映射"
-                        }</Typography>
+                        data["SEPARAT"] === true ?
+                            "按键点击释放光标，再点击继续映射" :
+                            "按键按下释放光标，抬起继续映射"
+                    }</Typography>
                 </Grid>
                 <Grid item xs={3}>
                     <Switch
@@ -979,9 +1126,9 @@ export default function ConfigManager() {
                 <Grid item xs={9}>
                     <Typography>{
                         data["RELEASE_MOUSE"] === true ?
-                        "释放光标":
-                        "不释放光标"
-                        }</Typography>
+                            "释放光标" :
+                            "不释放光标"
+                    }</Typography>
                 </Grid>
                 <Grid item xs={3}>
                     <Switch
@@ -994,22 +1141,22 @@ export default function ConfigManager() {
                 <Grid item xs={9}>
                     <Typography>{
                         data["TOUCH"] === true ?
-                        "执行点击并释放光标":
-                        "仅释放光标"
-                        }</Typography>
+                            "执行点击并释放光标" :
+                            "仅释放光标"
+                    }</Typography>
                 </Grid>
                 <Grid item xs={3}>
                     <Switch
                         checked={data["TOUCH"]}
                         onChange={() => {
-                            setConfig(produce(draft => { 
-                                draft.KEY_MAPS[data["KEY"]].TOUCH = !draft.KEY_MAPS[data["KEY"]].TOUCH ;
+                            setConfig(produce(draft => {
+                                draft.KEY_MAPS[data["KEY"]].TOUCH = !draft.KEY_MAPS[data["KEY"]].TOUCH;
                             }))
                         }}
                     />
                 </Grid>
             </Grid>
-           
+
         </div>
     }
 
@@ -1065,7 +1212,7 @@ export default function ConfigManager() {
                 }))
             } else if (e.target.value === "SMART_TOGGLE") {
                 setConfig(produce(draft => {
-                    draft.KEY_MAPS[data["KEY"]] = { "TYPE": "SMART_TOGGLE", "POS_S": [[0.1, 0.1], [0.2, 0.2]], "RELEASE_MOUSE": true, "SEPARAT": false , "TOUCH": true}
+                    draft.KEY_MAPS[data["KEY"]] = { "TYPE": "SMART_TOGGLE", "POS_S": [[0.1, 0.1], [0.2, 0.2]], "RELEASE_MOUSE": true, "SEPARAT": false, "TOUCH": true }
                 }))
             }
         }
@@ -1156,30 +1303,33 @@ export default function ConfigManager() {
                 setImgSize([document.getElementById("img").width, document.getElementById("img").height])
             }
         })
-        fetch("/configure/get")
-            .then(resp => resp.json())
-            .then(data => setConfig(data))
-            .catch(err => {
-                console.log(err)
-            })
 
-        fetch("/plugin/configure/getConfig")
-            .then(resp => resp.json())
-            .then(userConfig => {
-                fetch("/plugin/configure/getTemplate")
-                    .then(resp => resp.json())
-                    .then(pluginTemplate => {
-                        setPluginValue(userConfig)
-                        setPluginConfig(pluginTemplate)
-                    }
-                    )
-                    .catch(err => {
-                        console.log(err)
-                    })
-            })
-            .catch(err => {
-                console.log(err)
-            })
+        if (IS_GO_BACKEND) {
+            fetch("/configure/get")
+                .then(resp => resp.json())
+                .then(data => setConfig(data))
+                .catch(err => {
+                    console.log(err)
+                })
+
+            fetch("/plugin/configure/getConfig")
+                .then(resp => resp.json())
+                .then(userConfig => {
+                    fetch("/plugin/configure/getTemplate")
+                        .then(resp => resp.json())
+                        .then(pluginTemplate => {
+                            setPluginValue(userConfig)
+                            setPluginConfig(pluginTemplate)
+                        }
+                        )
+                        .catch(err => {
+                            console.log(err)
+                        })
+                })
+                .catch(err => {
+                    console.log(err)
+                })
+        }
     }, [])
 
     const KeyShow = ({ data }) => {
@@ -1362,6 +1512,7 @@ export default function ConfigManager() {
             setSelectKEY(value)
         }} />
         <input id="fileInput" type="file" style={{ display: "none" }} accept="image/*" onChange={handleFileChange} ></input>
+        <input id="configFileInput" type="file" style={{ display: "none" }} accept=".json" onChange={handelUserUploadJSON} ></input>
         <img id="img" src={config["IMG"]} style={{ width: "100vw", left: 0, top: 0 }} onClick={handelImgClick} onLoad={imgLoaded} ></img>
         <DraggableContainer>
             <div
